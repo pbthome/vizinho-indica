@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Vicini",
+    "slug": "vizinho-indica",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "vizinhoindica",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vizinhoindica.app"
+    },
+    "android": {
+      "package": "com.vizinhoindica.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1F6F5B"
+      }
+    },
+    "plugins": []
+  }
+}

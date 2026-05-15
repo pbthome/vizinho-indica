@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+.npm-cache/
+
+# Build/cache/temp
+_tmp/
+_lo/
+_render_qa/
+dist/
+build/
+coverage/
+.cache/
+
+# Logs
+*.log
+*.err.log
+
+# Environment
+.env
+.env.*
+docs/

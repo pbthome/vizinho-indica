@@ -1,0 +1,124 @@
+export type UserStatus = 'not_logged_in' | 'pending' | 'approved' | 'rejected' | 'blocked' | 'admin';
+
+export type Condominium = {
+  id: string;
+  name: string;
+};
+
+export type Category = {
+  id: string;
+  name: string;
+  icon?: string;
+  sortOrder?: number;
+};
+
+export type ServiceSpecialty = {
+  id: string;
+  name: string;
+  categoryId: string;
+  icon?: string;
+  aliases: string[];
+  sortOrder: number;
+  isPopular?: boolean;
+};
+
+export type User = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  condominiumId: string;
+  condominiumName: string;
+  unit: string;
+  status: UserStatus;
+};
+
+export type Review = {
+  id: string;
+  recommendationId: string;
+  residentName: string;
+  reviewerName?: string;
+  reviewerBlock?: string;
+  reviewerLot?: string;
+  servicePerformed?: string;
+  usedWhen?: 'this_week' | 'last_month' | 'three_to_six_months' | 'more_than_six_months';
+  wouldHireAgain?: boolean;
+  realUseConfirmed?: boolean;
+  rating: number;
+  comment: string;
+  photos?: string[];
+  createdAt: string;
+  uploadedAt?: string;
+};
+
+export type Recommendation = {
+  id: string;
+  condominiumId: string;
+  supplierName: string;
+  categoryId: string;
+  categoryName: string;
+  serviceSpecialtyId?: string;
+  serviceSpecialtyName?: string;
+  customServiceDescription?: string;
+  whatsapp: string;
+  normalizedPhone: string;
+  contactInfo: string;
+  providerPhotos?: string[];
+  averageRating: number;
+  recommendedByCount: number;
+  shortComment: string;
+  servicePerformed?: string;
+  usedWhen?: 'this_week' | 'last_month' | 'three_to_six_months' | 'more_than_six_months';
+  wouldHireAgain?: boolean;
+  realUseConfirmed?: boolean;
+  photos?: string[];
+  createdAt: string;
+  uploadedAt?: string;
+  reviews: Review[];
+  hidden?: boolean;
+};
+
+export type AccessRequest = {
+  id: string;
+  condominiumId: string;
+  name: string;
+  phone: string;
+  email: string;
+  unit: string;
+  requestDate: string;
+  status: 'pending' | 'approved' | 'rejected';
+};
+
+export type Report = {
+  id: string;
+  condominiumId: string;
+  recommendationId: string;
+  recommendationName: string;
+  reason: string;
+  reportedBy: string;
+  createdAt: string;
+  status: 'open' | 'kept' | 'hidden' | 'removed';
+};
+
+export type SignUpPayload = {
+  name: string;
+  phone: string;
+  email: string;
+  condominium: string;
+  unit: string;
+};
+
+export type NewRecommendationPayload = {
+  supplierName: string;
+  categoryId: string;
+  serviceSpecialtyId: string;
+  customServiceDescription?: string;
+  whatsapp: string;
+  servicePerformed: string;
+  usedWhen: 'this_week' | 'last_month' | 'three_to_six_months' | 'more_than_six_months';
+  wouldHireAgain: boolean;
+  rating: number;
+  comment: string;
+  photos?: string[];
+  confirmedUse: boolean;
+};
