@@ -2,7 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../constants/colors';
 import { AccessRequestDetailScreen } from '../screens/AccessRequestDetailScreen';
 import { AccessRequestsScreen } from '../screens/AccessRequestsScreen';
-import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
+import { FeedbacksScreen } from '../screens/FeedbacksScreen';
 import { RecommendationDetailScreen } from '../screens/RecommendationDetailScreen';
 import { ReportedRecommendationsScreen } from '../screens/ReportedRecommendationsScreen';
 import { AuthStack } from './AuthStack';
@@ -22,7 +22,7 @@ export function AppNavigator() {
       <Stack.Screen name="Auth" component={AuthStack} />
       <Stack.Screen name="Resident" component={ResidentTabs} />
       <Stack.Screen name="RecommendationDetail" component={RecommendationDetailScreen} />
-      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen name="Feedbacks" component={FeedbacksScreen} />
       <Stack.Screen name="AccessRequests" component={AccessRequestsScreen} />
       <Stack.Screen name="AccessRequestDetail" component={AccessRequestDetailScreen} />
       <Stack.Screen name="ReportedRecommendations" component={ReportedRecommendationsScreen} />

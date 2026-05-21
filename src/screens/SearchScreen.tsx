@@ -11,7 +11,7 @@ import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
-import { searchRecommendations } from '../services/mockApi';
+import { searchRecommendations } from '../services/api';
 import { openWhatsApp } from '../services/whatsapp';
 import { Recommendation } from '../types';
 import { commonStyles } from './styles';

@@ -1,17 +1,15 @@
 import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { ArrowUpRight, MessageCircle, Plus, Search, Star, ThumbsDown, ThumbsUp } from 'lucide-react-native';
 import { RefObject, useCallback, useRef, useState } from 'react';
-import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AdminSummaryCard } from '../components/AdminSummaryCard';
 import { ContextualFeedback, ContextualFeedbackState, FeedbackPlacement } from '../components/ContextualFeedback';
 import { getServiceSpecialtyById, popularServiceSpecialties, serviceSpecialtiesForPicker } from '../constants/categories';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
-import { isAdmin } from '../navigation/guards';
 import { useApp } from '../services/AppContext';
-import { getAccessRequests, getRecommendations, getReportedRecommendations } from '../services/mockApi';
+import { getRecommendations } from '../services/api';
 import { openWhatsApp } from '../services/whatsapp';
 import { Recommendation, ServiceSpecialty } from '../types';
 
@@ -23,8 +21,7 @@ export function HomeScreen({ navigation }: any) {
   const pendingFocusId = useRef<string | undefined>(undefined);
   const recommendationPositions = useRef<Record<string, number>>({});
   const [items, setItems] = useState<Recommendation[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [reportCount, setReportCount] = useState(0);
+  const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
@@ -36,16 +33,15 @@ export function HomeScreen({ navigation }: any) {
       if (!user) return;
       pendingFocusId.current = route.params?.focusRecommendationId;
       getRecommendations(user.condominiumId).then(setItems);
-      if (isAdmin(user)) {
-        getAccessRequests(user.condominiumId).then((data) => setPendingCount(data.length));
-        getReportedRecommendations(user.condominiumId).then((data) => setReportCount(data.length));
-      }
     }, [route.params?.focusRecommendationId, user])
   );
 
-  const bestRated = [...items].sort(sortByBestRated).slice(0, 3);
-  const recent = [...items].sort((a, b) => getLatestActivityDate(b).localeCompare(getLatestActivityDate(a))).slice(0, 3);
-  const popularSpecialties = getPopularHomeServices();
+  const filteredItems = selectedSpecialtyIds.length
+    ? items.filter((item) => item.serviceSpecialtyId && selectedSpecialtyIds.includes(item.serviceSpecialtyId))
+    : items;
+  const bestRated = [...filteredItems].sort(sortByBestRated).slice(0, 3);
+  const recent = [...filteredItems].sort((a, b) => getLatestActivityDate(b).localeCompare(getLatestActivityDate(a))).slice(0, 3);
+  const visibleSpecialties = getVisibleHomeServices(selectedSpecialtyIds);
   const firstName = user?.name.split(' ')[0] ?? 'vizinho';
 
   function focusRecommendationIfNeeded() {
@@ -71,6 +67,12 @@ export function HomeScreen({ navigation }: any) {
     setSearchOpen(true);
   }
 
+  function toggleSpecialtyFilter(service: ServiceSpecialty) {
+    setSelectedSpecialtyIds((current) =>
+      current.includes(service.id) ? current.filter((id) => id !== service.id) : [...current, service.id]
+    );
+  }
+
   function submitSearch() {
     const trimmedQuery = searchQuery.trim();
     if (!trimmedQuery) return;
@@ -84,7 +86,7 @@ export function HomeScreen({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.heroGlow} />
@@ -101,22 +103,17 @@ export function HomeScreen({ navigation }: any) {
 
           <Text style={styles.discoveryLabel}>Profissões mais procuradas</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
-            {popularSpecialties.map((specialty) => (
-              <Pressable key={specialty.id} style={styles.categoryPill} onPress={() => openService(specialty)}>
-                <Text style={styles.categoryPillText}>{specialty.name}</Text>
+            {visibleSpecialties.map((specialty) => (
+              <Pressable
+                key={specialty.id}
+                style={[styles.categoryPill, selectedSpecialtyIds.includes(specialty.id) && styles.categoryPillSelected]}
+                onPress={() => toggleSpecialtyFilter(specialty)}
+              >
+                <Text style={[styles.categoryPillText, selectedSpecialtyIds.includes(specialty.id) && styles.categoryPillTextSelected]}>{specialty.name}</Text>
               </Pressable>
             ))}
           </ScrollView>
         </View>
-
-        {isAdmin(user) ? (
-          <AdminSummaryCard
-            title="Painel do condomínio"
-            value={`${pendingCount} solicitações pendentes · ${reportCount} denúncias abertas`}
-            buttonTitle="Abrir painel"
-            onPress={() => navigation.getParent()?.navigate('AdminDashboard')}
-          />
-        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Melhores Avaliados</Text>
@@ -164,6 +161,7 @@ export function HomeScreen({ navigation }: any) {
         query={searchQuery}
         items={items}
         expanded={showAllServices}
+        selectedSpecialtyIds={selectedSpecialtyIds}
         onChangeQuery={setSearchQuery}
         onClose={() => {
           setSearchOpen(false);
@@ -172,6 +170,12 @@ export function HomeScreen({ navigation }: any) {
         onToggleExpanded={() => setShowAllServices((value) => !value)}
         onOpenProvider={openProvider}
         onOpenService={openService}
+        onApplyServiceFilter={(service) => {
+          setSelectedSpecialtyIds((current) => (current.includes(service.id) ? current : [...current, service.id]));
+          setSearchQuery('');
+          setSearchOpen(false);
+          setShowAllServices(false);
+        }}
         onSubmitSearch={submitSearch}
       />
       <ContextualFeedback feedback={feedback} bottomInset={Math.max(insets.bottom, 12) + 82} />
@@ -184,33 +188,42 @@ function HomeSearchSheet({
   query,
   items,
   expanded,
+  selectedSpecialtyIds,
   onChangeQuery,
   onClose,
   onToggleExpanded,
   onOpenProvider,
   onOpenService,
+  onApplyServiceFilter,
   onSubmitSearch
 }: {
   visible: boolean;
   query: string;
   items: Recommendation[];
   expanded: boolean;
+  selectedSpecialtyIds: string[];
   onChangeQuery: (value: string) => void;
   onClose: () => void;
   onToggleExpanded: () => void;
   onOpenProvider: (item: Recommendation) => void;
   onOpenService: (service: ServiceSpecialty) => void;
+  onApplyServiceFilter: (service: ServiceSpecialty) => void;
   onSubmitSearch: () => void;
 }) {
   const normalized = normalize(query);
-  const popular = getPopularHomeServices();
   const providerResults = getProviderSuggestions(items, query);
-  const serviceResults = getServiceSuggestions(query);
-  const visibleServices = normalized ? serviceResults : expanded ? serviceResults : serviceResults.filter((item) => item.id !== 'outros').slice(0, 5);
+  const allServices = getServiceSuggestions('');
+  const visibleServices = expanded ? allServices : allServices.filter((item) => item.id !== 'outros').slice(0, 5);
+  const matchedService = getMatchedServiceSpecialty(query);
+  const isMatchedServiceSelected = matchedService ? selectedSpecialtyIds.includes(matchedService.id) : false;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        style={styles.modalBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      >
         <Pressable style={styles.modalScrim} onPress={onClose} />
         <SafeAreaView style={[styles.sheet, normalized || expanded ? styles.sheetExpanded : null]}>
           <View style={styles.sheetHandle} />
@@ -240,19 +253,17 @@ function HomeSearchSheet({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
-            {!normalized ? (
-              <>
-                <Text style={styles.sheetSectionTitle}>Mais procurados</Text>
-                <View style={styles.sheetChipWrap}>
-                  {popular.map((specialty) => (
-                    <Pressable key={specialty.id} style={styles.popularChip} onPress={() => onOpenService(specialty)}>
-                      <Text style={styles.popularChipText}>{specialty.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
+            {matchedService ? (
+              <Pressable
+                style={[styles.applyFilterButton, isMatchedServiceSelected && styles.applyFilterButtonSelected]}
+                onPress={() => onApplyServiceFilter(matchedService)}
+                disabled={isMatchedServiceSelected}
+              >
+                <Text style={[styles.applyFilterButtonText, isMatchedServiceSelected && styles.applyFilterButtonTextSelected]}>
+                  {isMatchedServiceSelected ? `"${matchedService.name}" já está filtrando a home` : `Aplicar "${matchedService.name}" na tela inicial`}
+                </Text>
+              </Pressable>
             ) : null}
-
             {normalized && providerResults.length ? (
               <>
                 <Text style={styles.sheetSectionTitle}>Prestadores</Text>
@@ -273,7 +284,11 @@ function HomeSearchSheet({
               </>
             ) : null}
 
-            <View style={styles.fullListHeader}>
+            {normalized && !providerResults.length ? <Text style={styles.sheetEmptyText}>Nenhum prestador encontrado para essa profissão no momento.</Text> : null}
+
+            {!normalized ? (
+              <>
+                <View style={styles.fullListHeader}>
               <Text style={styles.sheetSectionTitle}>{normalized ? 'Serviços' : 'Todos os serviços'}</Text>
               {!normalized ? (
                 <Pressable onPress={onToggleExpanded}>
@@ -293,9 +308,11 @@ function HomeSearchSheet({
                 </Pressable>
               ) : null}
             </View>
+              </>
+            ) : null}
           </ScrollView>
         </SafeAreaView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -505,10 +522,32 @@ function getServiceSuggestions(query: string) {
   return outros ? [...matches, outros] : matches;
 }
 
+function getMatchedServiceSpecialty(query: string) {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) return undefined;
+
+  return serviceSpecialtiesForPicker
+    .filter((specialty) => specialty.id !== 'outros')
+    .find((specialty) => [specialty.name, ...specialty.aliases].some((value) => normalize(value) === normalizedQuery));
+}
+
 function getPopularHomeServices() {
   const ids = ['eletricista', 'diarista', 'jardineiro', 'piscineiro', 'marido_de_aluguel', 'encanador'];
   const fixedServices = ids.map((id) => getServiceSpecialtyById(id)).filter(Boolean) as ServiceSpecialty[];
   return fixedServices.length ? fixedServices : popularServiceSpecialties.slice(0, 6);
+}
+
+function getVisibleHomeServices(selectedIds: string[]) {
+  const selectedServices = selectedIds.map((id) => getServiceSpecialtyById(id)).filter(Boolean) as ServiceSpecialty[];
+  const popularServices = getPopularHomeServices();
+  const orderedServices = [...selectedServices, ...popularServices];
+  const uniqueServices = new Map<string, ServiceSpecialty>();
+
+  orderedServices.forEach((service) => {
+    if (!uniqueServices.has(service.id)) uniqueServices.set(service.id, service);
+  });
+
+  return Array.from(uniqueServices.values());
 }
 
 function normalize(value: string) {
@@ -694,11 +733,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6
   },
+  categoryPillSelected: {
+    backgroundColor: colors.lightGreen,
+    borderColor: colors.primary
+  },
   categoryPillText: {
     color: colors.text,
     fontSize: typography.small,
     fontWeight: '600',
     fontFamily: typography.fontFamily
+  },
+  categoryPillTextSelected: {
+    color: colors.primary,
+    fontWeight: '800'
   },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end' },
   modalScrim: {
@@ -755,8 +802,37 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: typography.fontFamily
   },
+  applyFilterButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  applyFilterButtonSelected: {
+    backgroundColor: colors.lightGreen,
+    borderWidth: 1,
+    borderColor: colors.primary
+  },
+  applyFilterButtonText: {
+    color: colors.surface,
+    fontSize: typography.small,
+    lineHeight: 20,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  applyFilterButtonTextSelected: {
+    color: colors.primary
+  },
   sheetContent: { gap: spacing.sm, paddingBottom: spacing.xl },
   sheetSectionTitle: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 15, fontWeight: '800', fontFamily: typography.fontFamily },
+  sheetEmptyText: {
+    color: colors.secondaryText,
+    fontSize: typography.small,
+    lineHeight: 20,
+    fontFamily: typography.fontFamily
+  },
   sheetChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 2 },
   popularChip: {
     minHeight: 32,

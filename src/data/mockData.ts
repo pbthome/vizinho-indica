@@ -1,4 +1,4 @@
-import { AccessRequest, Condominium, Recommendation, Report, User } from '../types';
+import { AccessRequest, Condominium, Feedback, Recommendation, Report, User } from '../types';
 import { normalizePhoneNumber } from '../utils/phone';
 
 export const condominiums: Condominium[] = [
@@ -264,11 +264,45 @@ export const recommendations: Recommendation[] = [
 ];
 
 export const accessRequests: AccessRequest[] = [
-  { id: 'req-1', condominiumId: 'condo-vila-verde', name: 'Carla Menezes', phone: '+5511888881111', email: 'carla@email.com', unit: 'Bloco A, 101', requestDate: '2026-05-06', status: 'pending' },
-  { id: 'req-2', condominiumId: 'condo-vila-verde', name: 'Thiago Rocha', phone: '+5511888882222', email: 'thiago@email.com', unit: 'Casa 33', requestDate: '2026-05-06', status: 'pending' }
+  { id: 'req-1', condominiumId: 'condo-vila-verde', name: 'Carla Menezes', phone: '+5511888881111', email: 'carla@email.com', unit: 'Quadra A, Lote 101', requestDate: '2026-05-14', status: 'pending' },
+  { id: 'req-2', condominiumId: 'condo-vila-verde', name: 'Thiago Rocha', phone: '+5511888882222', email: 'thiago@email.com', unit: 'Quadra C, Lote 33', requestDate: '2026-05-13', status: 'pending' },
+  { id: 'req-3', condominiumId: 'condo-vila-verde', name: 'Helena Duarte', phone: '+5511888883333', email: 'helena@email.com', unit: 'Quadra B, Lote 18', requestDate: '2026-05-11', status: 'approved' }
 ];
 
 export const reports: Report[] = [
   { id: 'rep-1', condominiumId: 'condo-vila-verde', recommendationId: 'rec-7', recommendationName: 'Reforma Fácil', reason: 'Atrasou a visita combinada', reportedBy: 'Sérgio, Bloco D', createdAt: '2026-05-02', status: 'open' },
   { id: 'rep-2', condominiumId: 'condo-vila-verde', recommendationId: 'rec-10', recommendationName: 'Piscinas Limpas SP', reason: 'Preço informado mudou no atendimento', reportedBy: 'Marcelo, Casa 21', createdAt: '2026-05-03', status: 'open' }
+];
+export const feedbacks: Feedback[] = [
+  {
+    id: 'fb-1',
+    condominiumId: 'condo-vila-verde',
+    userId: 'user-approved',
+    userName: 'Pedro Almeida',
+    subject: 'Sugestao de melhoria',
+    message: 'Seria bom ter um jeito mais rapido de avisar quando uma indicacao mudou de telefone.',
+    createdAt: '2026-05-14T10:15:00.000Z',
+    status: 'novo'
+  },
+  {
+    id: 'fb-2',
+    condominiumId: 'condo-vila-verde',
+    userId: 'user-pending',
+    userName: 'Marina Costa',
+    subject: 'Problema no app',
+    message: 'Nao consegui abrir as fotos de uma recomendacao na primeira tentativa.',
+    createdAt: '2026-05-13T18:40:00.000Z',
+    status: 'lido'
+  },
+  {
+    id: 'fb-3',
+    condominiumId: 'condo-vila-verde',
+    userId: 'user-approved',
+    userName: 'Pedro Almeida',
+    subject: 'Dados incorretos',
+    message: 'Um fornecedor aparece com a especialidade errada na busca.',
+    createdAt: '2026-05-10T08:20:00.000Z',
+    status: 'resolvido',
+    archivedAt: '2026-05-12T09:00:00.000Z'
+  }
 ];

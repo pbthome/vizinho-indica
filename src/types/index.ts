@@ -33,6 +33,19 @@ export type User = {
   status: UserStatus;
 };
 
+export type ModerationFields = {
+  deletedAt?: string;
+  deletedBy?: string;
+  moderationReason?: string;
+};
+
+export type DeletedPhoto = ModerationFields & {
+  uri: string;
+  source: 'provider' | 'review';
+  recommendationId: string;
+  reviewId?: string;
+};
+
 export type Review = {
   id: string;
   recommendationId: string;
@@ -47,9 +60,13 @@ export type Review = {
   rating: number;
   comment: string;
   photos?: string[];
+  deletedPhotos?: DeletedPhoto[];
   createdAt: string;
   uploadedAt?: string;
-};
+  commentDeletedAt?: string;
+  commentDeletedBy?: string;
+  commentModerationReason?: string;
+} & ModerationFields;
 
 export type Recommendation = {
   id: string;
@@ -72,11 +89,12 @@ export type Recommendation = {
   wouldHireAgain?: boolean;
   realUseConfirmed?: boolean;
   photos?: string[];
+  deletedPhotos?: DeletedPhoto[];
   createdAt: string;
   uploadedAt?: string;
   reviews: Review[];
   hidden?: boolean;
-};
+} & ModerationFields;
 
 export type AccessRequest = {
   id: string;
@@ -100,10 +118,33 @@ export type Report = {
   status: 'open' | 'kept' | 'hidden' | 'removed';
 };
 
+export type FeedbackSubject =
+  | 'Problema no app'
+  | 'Sugestao de melhoria'
+  | 'Dados incorretos'
+  | 'Recomendacao/fornecedor'
+  | 'Duvida'
+  | 'Outro';
+
+export type FeedbackStatus = 'novo' | 'lido' | 'resolvido';
+
+export type Feedback = {
+  id: string;
+  condominiumId: string;
+  userId: string;
+  userName?: string;
+  subject: FeedbackSubject;
+  message: string;
+  createdAt: string;
+  status: FeedbackStatus;
+  archivedAt?: string;
+};
+
 export type SignUpPayload = {
   name: string;
   phone: string;
   email: string;
+  password?: string;
   condominium: string;
   unit: string;
 };
@@ -121,4 +162,9 @@ export type NewRecommendationPayload = {
   comment: string;
   photos?: string[];
   confirmedUse: boolean;
+};
+
+export type CreateFeedbackPayload = {
+  subject: FeedbackSubject;
+  message: string;
 };

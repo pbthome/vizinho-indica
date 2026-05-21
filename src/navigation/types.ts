@@ -11,6 +11,8 @@ export type AuthStackParamList = {
 
 export type ResidentTabsParamList = {
   Home: { focusRecommendationId?: string } | undefined;
+  Dashboard: undefined;
+  Management: undefined;
   Profile: undefined;
   AddRecommendation: { providerId?: string } | undefined;
 };
@@ -19,7 +21,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Resident: NavigatorScreenParams<ResidentTabsParamList> | undefined;
   RecommendationDetail: { id: string; focusReviewId?: string };
-  AdminDashboard: undefined;
+  Feedbacks: undefined;
   AccessRequests: undefined;
   AccessRequestDetail: { id: string };
   ReportedRecommendations: undefined;

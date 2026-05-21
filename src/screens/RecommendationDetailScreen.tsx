@@ -6,7 +6,7 @@ import { ContextualFeedback, ContextualFeedbackState, FeedbackPlacement } from '
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
-import { getRecommendationById } from '../services/mockApi';
+import { getRecommendationByIdAsync } from '../services/api';
 import { openWhatsApp } from '../services/whatsapp';
 import { Recommendation, Review } from '../types';
 
@@ -24,12 +24,12 @@ export function RecommendationDetailScreen({ route, navigation }: any) {
 
   useEffect(() => {
     pendingFocusReviewId.current = route.params.focusReviewId;
-    setItem(getRecommendationById(route.params.id));
+    getRecommendationByIdAsync(route.params.id).then(setItem);
   }, [route.params.focusReviewId, route.params.id]);
 
   if (!item) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
         <View style={styles.emptyState}>
           <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => navigation.goBack()}>
             <ArrowLeft color={colors.darkGreen} size={22} />
@@ -61,7 +61,7 @@ export function RecommendationDetailScreen({ route, navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Pressable accessibilityRole="button" accessibilityLabel="Voltar" style={styles.backButton} onPress={() => navigation.goBack()}>
           <ArrowLeft color={colors.darkGreen} size={22} />

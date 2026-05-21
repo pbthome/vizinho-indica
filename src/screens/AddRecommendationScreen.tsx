@@ -1,20 +1,20 @@
 ﻿import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Camera, Search, Star, X } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '../components/AppButton';
 import { AppInput } from '../components/AppInput';
 import { PhoneInput } from '../components/PhoneInput';
-import { ScreenContainer } from '../components/ScreenContainer';
 import { getServiceSpecialtyById, serviceSpecialtiesForPicker } from '../constants/categories';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
-import { addRecommendation, addReviewToExistingRecommendation, findRecommendationByPhone, getRecommendationById } from '../services/mockApi';
-import { NewRecommendationPayload } from '../types';
+import { addRecommendation, addReviewToExistingRecommendation, findRecommendationByPhoneAsync, getRecommendationByIdAsync } from '../services/api';
+import { NewRecommendationPayload, Recommendation } from '../types';
 import { getPhoneValidation } from '../utils/phone';
 
 type UsedWhen = NewRecommendationPayload['usedWhen'];
@@ -37,6 +37,9 @@ export function AddRecommendationScreen() {
   const { user } = useApp();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const scrollRef = useRef<ScrollView>(null);
   const [supplierName, setSupplierName] = useState('');
   const [serviceSpecialtyId, setServiceSpecialtyId] = useState('');
   const [serviceSearch, setServiceSearch] = useState('');
@@ -54,12 +57,10 @@ export function AddRecommendationScreen() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [successTarget, setSuccessTarget] = useState<SuccessTarget | null>(null);
-  const providerFromRoute = route.params?.providerId ? getRecommendationById(route.params.providerId) : undefined;
+  const [commentFieldY, setCommentFieldY] = useState(0);
+  const [providerFromRoute, setProviderFromRoute] = useState<Recommendation | undefined>();
+  const [existingProvider, setExistingProvider] = useState<Recommendation | undefined>();
   const selectedSpecialty = getServiceSpecialtyById(serviceSpecialtyId);
-  const existingProvider = useMemo(() => {
-    if (!user || !getPhoneValidation(whatsapp).isValid) return undefined;
-    return findRecommendationByPhone(user.condominiumId, whatsapp);
-  }, [user, whatsapp]);
   const contextualProvider = providerFromRoute || existingProvider;
   const isContextualReviewFlow = Boolean(providerFromRoute);
   const isAddingToExistingProvider = Boolean(contextualProvider);
@@ -67,26 +68,44 @@ export function AddRecommendationScreen() {
   useEffect(() => {
     const providerId = route.params?.providerId;
     if (!providerId) {
+      setProviderFromRoute(undefined);
       resetForm();
       return;
     }
 
-    const provider = getRecommendationById(providerId);
-    if (!provider) return;
+    getRecommendationByIdAsync(providerId).then((provider) => {
+      if (!provider) return;
 
-    setSupplierName(provider.supplierName);
-    setWhatsapp(provider.whatsapp);
-    setServiceSpecialtyId(provider.serviceSpecialtyId ?? '');
-    setServiceSearch(provider.customServiceDescription || provider.serviceSpecialtyName || provider.categoryName);
-    setCustomServiceDescription(provider.customServiceDescription ?? '');
-    setServicePerformed('');
-    setUsedWhen(null);
-    setRating(0);
-    setWouldHireAgain(null);
-    setComment('');
-    setPhotos([]);
-    setErrors({});
+      setProviderFromRoute(provider);
+      setSupplierName(provider.supplierName);
+      setWhatsapp(provider.whatsapp);
+      setServiceSpecialtyId(provider.serviceSpecialtyId ?? '');
+      setServiceSearch('');
+      setCustomServiceDescription(provider.customServiceDescription ?? '');
+      setServicePerformed('');
+      setUsedWhen(null);
+      setRating(0);
+      setWouldHireAgain(null);
+      setComment('');
+      setPhotos([]);
+      setErrors({});
+    });
   }, [route.params?.providerId]);
+
+  useEffect(() => {
+    if (!user || !getPhoneValidation(whatsapp).isValid || providerFromRoute) {
+      setExistingProvider(undefined);
+      return;
+    }
+
+    let active = true;
+    findRecommendationByPhoneAsync(user.condominiumId, whatsapp).then((provider) => {
+      if (active) setExistingProvider(provider);
+    });
+    return () => {
+      active = false;
+    };
+  }, [providerFromRoute, user, whatsapp]);
 
   function resetForm() {
     setSupplierName('');
@@ -193,8 +212,35 @@ export function AddRecommendationScreen() {
     setPhotos((current) => current.filter((photo) => photo.id !== id));
   }
 
+  function focusCommentField() {
+    const targetY = Math.max(commentFieldY - 24, 0);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }, Platform.OS === 'ios' ? 120 : 40);
+  }
+
   return (
-    <ScreenContainer>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
+      <KeyboardAvoidingView
+        style={styles.keyboardArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.top, 8) : 0}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingHorizontal: spacing.lg,
+              paddingTop: spacing.lg,
+              paddingBottom: tabBarHeight + spacing.lg
+            }
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+        >
       <View style={styles.screen}>
         <View style={styles.intro}>
           <Text style={styles.title}>{isContextualReviewFlow ? 'Compartilhar experiência' : 'Indicar serviço'}</Text>
@@ -220,20 +266,19 @@ export function AddRecommendationScreen() {
             ) : (
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Qual serviço esse profissional realiza?</Text>
-                <Pressable style={styles.serviceSelector} onPress={() => setServicePickerOpen(true)}>
-                  <Search color={colors.secondaryText} size={18} />
+                <Pressable
+                  style={[styles.serviceSelector, selectedSpecialty && styles.serviceSelectorSelected]}
+                  onPress={() => {
+                    setServiceSearch('');
+                    setShowAllServices(false);
+                    setServicePickerOpen(true);
+                  }}
+                >
+                  <Search color={selectedSpecialty ? colors.primary : colors.secondaryText} size={18} />
                   <Text style={[styles.serviceSelectorText, selectedSpecialty && styles.serviceSelectorTextSelected]}>
                     {selectedSpecialty?.name ?? 'Buscar serviço'}
                   </Text>
                 </Pressable>
-                {selectedSpecialty ? (
-                  <View style={styles.selectedService}>
-                    <Text style={styles.selectedServiceText}>{selectedSpecialty.name}</Text>
-                    <Pressable onPress={() => { setServiceSpecialtyId(''); setServiceSearch(''); setCustomServiceDescription(''); }}>
-                      <Text style={styles.clearServiceText}>Trocar</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
                 <Text style={styles.popularLabel}>Mais procurados</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularChipList}>
                   {getPopularSelectorServices().map((specialtyItem) => (
@@ -302,21 +347,26 @@ export function AddRecommendationScreen() {
             </Pressable>
           </OptionGroup>
 
-          <AppInput
-            label="Comentário"
-            value={comment}
-            onChangeText={setComment}
-            error={errors.comment}
-            multiline
-            placeholder="Conte como foi sua experiência. O profissional foi pontual? Confiável? Resolveu o problema?"
-            style={styles.commentInput}
-          />
+          <View onLayout={(event) => setCommentFieldY(event.nativeEvent.layout.y)}>
+            <AppInput
+              label="Comentário"
+              value={comment}
+              onChangeText={setComment}
+              onFocus={focusCommentField}
+              error={errors.comment}
+              multiline
+              placeholder="Conte como foi sua experiência. O profissional foi pontual? Confiável? Resolveu o problema?"
+              style={styles.commentInput}
+            />
+          </View>
 
           <PhotoUploadSection photos={photos} onPickPhotos={pickPhotos} onRemovePhoto={removePhoto} />
         </View>
 
         <AppButton title={contextualProvider ? 'Adicionar recomendação' : 'Indicar aos vizinhos'} onPress={submit} loading={loading} style={styles.submitButton} />
       </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
       <SuccessModal
         visible={Boolean(successMessage)}
         message={successMessage}
@@ -345,19 +395,19 @@ export function AddRecommendationScreen() {
         expanded={showAllServices}
         onChangeQuery={setServiceSearch}
         onClose={() => {
+          setServiceSearch('');
           setServicePickerOpen(false);
           setShowAllServices(false);
         }}
         onToggleExpanded={() => setShowAllServices((value) => !value)}
         onSelect={selectSpecialty}
       />
-    </ScreenContainer>
+    </SafeAreaView>
   );
 
   function selectSpecialty(id: string) {
-    const specialty = getServiceSpecialtyById(id);
     setServiceSpecialtyId(id);
-    setServiceSearch(specialty?.name ?? '');
+    setServiceSearch('');
     if (id !== 'outros') setCustomServiceDescription('');
     setServicePickerOpen(false);
     setShowAllServices(false);
@@ -515,13 +565,16 @@ function ServiceSpecialtyPicker({
   onSelect: (id: string) => void;
 }) {
   const normalized = normalize(query);
-  const popular = getPopularSelectorServices();
   const allServices = getServiceSuggestions(query);
   const visibleServices = normalized ? allServices : expanded ? allServices : allServices.filter((item) => item.id !== 'outros').slice(0, 5);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
+      <KeyboardAvoidingView
+        style={styles.modalBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      >
         <Pressable style={styles.modalScrim} onPress={onClose} />
         <SafeAreaView style={[styles.sheet, normalized || expanded ? styles.sheetExpanded : null]}>
           <View style={styles.sheetHandle} />
@@ -544,20 +597,7 @@ function ServiceSpecialtyPicker({
               onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
-            {!normalized ? (
-              <>
-                <Text style={styles.sheetSectionTitle}>Mais procurados</Text>
-                <View style={styles.sheetChipWrap}>
-                  {popular.map((specialty) => (
-                    <Pressable key={specialty.id} style={[styles.popularChip, selectedId === specialty.id && styles.popularChipSelected]} onPress={() => onSelect(specialty.id)}>
-                      <Text style={[styles.popularChipText, selectedId === specialty.id && styles.popularChipTextSelected]}>{specialty.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : null}
-
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
             <View style={styles.fullListHeader}>
               <Text style={styles.sheetSectionTitle}>{normalized ? 'Resultados' : 'Todos os serviços'}</Text>
               {!normalized ? (
@@ -575,7 +615,7 @@ function ServiceSpecialtyPicker({
             </View>
           </ScrollView>
         </SafeAreaView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -617,7 +657,11 @@ function normalize(value: string) {
 }
 
 const styles = StyleSheet.create({
-  screen: { gap: spacing.md, paddingBottom: spacing.lg },
+  safe: { flex: 1, backgroundColor: colors.background },
+  keyboardArea: { flex: 1 },
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  screen: { gap: spacing.md },
   intro: {
     backgroundColor: colors.surface,
     borderRadius: 22,
@@ -658,6 +702,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   },
+  serviceSelectorSelected: {
+    backgroundColor: colors.lightGreen,
+    borderColor: colors.primary
+  },
   serviceSelectorText: {
     flex: 1,
     color: colors.secondaryText,
@@ -665,7 +713,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: typography.fontFamily
   },
-  serviceSelectorTextSelected: { color: colors.text, fontWeight: '700' },
+  serviceSelectorTextSelected: { color: colors.primary, fontWeight: '800' },
   serviceSearchInput: {
     flex: 1,
     color: colors.text,
@@ -673,19 +721,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: typography.fontFamily
   },
-  selectedService: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 13,
-    backgroundColor: colors.lightGreen,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7
-  },
-  selectedServiceText: { color: colors.primary, fontSize: typography.small, fontWeight: '800', fontFamily: typography.fontFamily },
-  clearServiceText: { color: colors.darkGreen, fontSize: typography.tiny, fontWeight: '800', fontFamily: typography.fontFamily },
   popularLabel: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 15, fontWeight: '700', fontFamily: typography.fontFamily },
   popularChipList: { gap: 7, paddingRight: spacing.md },
   popularChip: {
@@ -861,7 +896,6 @@ const styles = StyleSheet.create({
   sheetSearchActive: { borderColor: colors.primary, backgroundColor: colors.surface },
   sheetContent: { gap: spacing.sm, paddingBottom: spacing.xl },
   sheetSectionTitle: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 15, fontWeight: '800', fontFamily: typography.fontFamily },
-  sheetChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 2 },
   fullListHeader: {
     flexDirection: 'row',
     alignItems: 'center',

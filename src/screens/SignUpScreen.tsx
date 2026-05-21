@@ -8,7 +8,8 @@ import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
-import { requestAccess } from '../services/mockApi';
+import { requestAccess } from '../services/api';
+import { getBackendMode, getBackendStatusMessage } from '../services/supabase/config';
 import { getPhoneValidation } from '../utils/phone';
 
 const MVP_CONDOMINIUM = 'Jardins Bolonha';
@@ -17,6 +18,7 @@ type SignUpForm = {
   name: string;
   phone: string;
   email: string;
+  password: string;
   condominium: string;
   block: string;
   lot: string;
@@ -26,10 +28,13 @@ type SignUpErrors = Partial<Record<keyof SignUpForm, string>>;
 
 export function SignUpScreen({ navigation }: any) {
   const { setUser } = useApp();
+  const backendMode = getBackendMode();
+  const backendMessage = getBackendStatusMessage();
   const [form, setForm] = useState<SignUpForm>({
     name: '',
     phone: '',
     email: '',
+    password: '',
     condominium: MVP_CONDOMINIUM,
     block: '',
     lot: ''
@@ -55,6 +60,7 @@ export function SignUpScreen({ navigation }: any) {
     if (!form.block.trim()) nextErrors.block = 'O campo Quadra está vazio.';
     if (!form.lot.trim()) nextErrors.lot = 'O campo Lote está vazio.';
 
+    if (form.password.length < 6) nextErrors.password = 'A senha precisa ter pelo menos 6 caracteres.';
     setErrors(nextErrors);
     return nextErrors;
   }
@@ -68,31 +74,44 @@ export function SignUpScreen({ navigation }: any) {
     }
 
     setLoading(true);
-    const user = await requestAccess({
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      condominium: form.condominium.trim(),
-      unit: `Quadra ${form.block.trim()}, Lote ${form.lot.trim()}`
-    });
-    setUser(user);
-    setLoading(false);
-    navigation.replace('WaitingApproval');
+    try {
+      const user = await requestAccess({
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        condominium: form.condominium.trim(),
+        unit: `Quadra ${form.block.trim()}, Lote ${form.lot.trim()}`
+      });
+      setUser(user);
+      navigation.replace('WaitingApproval');
+    } catch (error) {
+      Alert.alert('Nao foi possivel solicitar acesso', error instanceof Error ? error.message : 'Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer keyboardAvoiding keyboardDismissMode="interactive">
       <View style={styles.screen}>
         <View style={styles.hero}>
           <Text style={styles.title}>Solicitar acesso</Text>
           <Text style={styles.subtitle}>A Vicini é uma rede privada do condomínio. Seus dados ajudam a manter as recomendações dentro da comunidade.</Text>
         </View>
+        {backendMode === 'mock' ? (
+          <View style={styles.mockNotice}>
+            <Text style={styles.mockNoticeLabel}>Modo demonstracao</Text>
+            <Text style={styles.mockNoticeText}>{backendMessage}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.formSurface}>
           <View style={styles.formSection}>
             <AppInput label="Nome completo" value={form.name} onChangeText={update('name')} error={errors.name} />
             <PhoneInput label="Telefone" value={form.phone} onChangeText={update('phone')} error={errors.phone} helperText="Escolha o país e digite DDD + número." />
             <AppInput label="Email" value={form.email} onChangeText={update('email')} error={errors.email} autoCapitalize="none" keyboardType="email-address" />
+            <AppInput label="Senha" value={form.password} onChangeText={update('password')} error={errors.password} secureTextEntry />
           </View>
 
           <View style={styles.formSection}>
@@ -146,6 +165,28 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: spacing.xs,
     paddingBottom: 2
+  },
+  mockNotice: {
+    backgroundColor: '#FFF6E4',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E8D7A8',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: 6
+  },
+  mockNoticeLabel: {
+    color: '#7A5A00',
+    fontSize: typography.small,
+    lineHeight: 18,
+    fontWeight: '900',
+    fontFamily: typography.fontFamily
+  },
+  mockNoticeText: {
+    color: '#7A5A00',
+    fontSize: typography.small,
+    lineHeight: 20,
+    fontFamily: typography.fontFamily
   },
   title: {
     color: colors.text,

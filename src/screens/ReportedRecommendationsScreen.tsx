@@ -5,8 +5,10 @@ import { AppButton } from '../components/AppButton';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { spacing } from '../constants/spacing';
+import { isAdmin } from '../navigation/guards';
 import { useApp } from '../services/AppContext';
-import { getReportedRecommendations, moderateReport } from '../services/mockApi';
+import { getReportedRecommendations, moderateReport } from '../services/api';
+import { getBackendMode } from '../services/supabase/config';
 import { Report } from '../types';
 import { commonStyles } from './styles';
 
@@ -15,15 +17,19 @@ export function ReportedRecommendationsScreen({ navigation }: any) {
   const [reports, setReports] = useState<Report[]>([]);
 
   const load = useCallback(() => {
-    if (!user) return;
+    if (!user || !isAdmin(user)) {
+      navigation.replace('Resident');
+      return;
+    }
     getReportedRecommendations(user.condominiumId).then(setReports);
-  }, [user]);
+  }, [navigation, user]);
 
   useFocusEffect(load);
 
   async function decide(id: string, action: 'kept' | 'hidden' | 'removed') {
-    await moderateReport(id, action);
-    Alert.alert('Denúncia revisada', 'A decisão foi aplicada no mock.');
+    if (!user) return;
+    await moderateReport(user, id, action);
+    Alert.alert('Denúncia revisada', getBackendMode() === 'supabase' ? 'A decisão foi aplicada no backend real.' : 'A decisão foi aplicada no mock.');
     load();
   }
 

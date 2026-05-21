@@ -1,22 +1,32 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, User } from 'lucide-react-native';
+import { BarChart3, Home, ShieldAlert, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../constants/colors';
+import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 import { AddRecommendationScreen } from '../screens/AddRecommendationScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { ManagementScreen } from '../screens/ManagementScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { useApp } from '../services/AppContext';
+import { isAdmin } from './guards';
 import { ResidentTabsParamList } from './types';
 
 const Tab = createBottomTabNavigator<ResidentTabsParamList>();
 
 export function ResidentTabs() {
+  const { user } = useApp();
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, 8);
+  const showAdminDashboard = isAdmin(user);
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        sceneStyle: {
+          flex: 1,
+          backgroundColor: colors.background
+        },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.secondaryText,
         tabBarHideOnKeyboard: true,
@@ -38,6 +48,12 @@ export function ResidentTabs() {
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Início', tabBarIcon: ({ color }) => <Home color={color} size={21} /> }} />
+      {showAdminDashboard ? (
+        <>
+          <Tab.Screen name="Dashboard" component={AdminDashboardScreen} options={{ title: 'Painel', tabBarIcon: ({ color }) => <BarChart3 color={color} size={21} /> }} />
+          <Tab.Screen name="Management" component={ManagementScreen} options={{ title: 'Gestão', tabBarIcon: ({ color }) => <ShieldAlert color={color} size={21} /> }} />
+        </>
+      ) : null}
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Perfil', tabBarIcon: ({ color }) => <User color={color} size={21} /> }} />
       <Tab.Screen
         name="AddRecommendation"

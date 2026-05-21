@@ -1,0 +1,4 @@
+﻿interface:
+  display_name: "Vizinho Indica Review"
+  short_description: "Revisa codigo com foco no MVP Vizinho Indica"
+  default_prompt: "Use $vizinho-indica-code-review para revisar mudancas deste projeto com foco em regressions, dados reais vs. mock e impacto no fluxo do usuario."

@@ -3,12 +3,20 @@ import { Alert, Text, View } from 'react-native';
 import { AppButton } from '../components/AppButton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { spacing } from '../constants/spacing';
-import { approveAccessRequest, getAccessRequestById, rejectAccessRequest } from '../services/mockApi';
+import { isAdmin } from '../navigation/guards';
+import { useApp } from '../services/AppContext';
+import { approveAccessRequest, getAccessRequestById, rejectAccessRequest } from '../services/api';
 import { AccessRequest } from '../types';
 import { commonStyles } from './styles';
 
 export function AccessRequestDetailScreen({ route, navigation }: any) {
+  const { user } = useApp();
   const [request] = useState<AccessRequest | undefined>(() => getAccessRequestById(route.params.id));
+
+  if (!user || !isAdmin(user)) {
+    navigation.replace('Resident');
+    return null;
+  }
 
   async function approve() {
     if (!request) return;

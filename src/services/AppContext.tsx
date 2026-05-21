@@ -1,6 +1,8 @@
-import { createContext, PropsWithChildren, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
 import { User } from '../types';
-import * as api from './mockApi';
+import * as api from './api';
+import { isSupabaseConfigured } from './supabase/config';
+import { supabase } from './supabase/client';
 
 type AppContextValue = {
   user: User | null;
@@ -13,6 +15,32 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export function AppProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+
+    const syncAuthenticatedUser = () => {
+      setTimeout(() => {
+        void api
+          .getCurrentUser()
+          .then((nextUser) => setUser(nextUser))
+          .catch(() => setUser(null));
+      }, 0);
+    };
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        setUser(null);
+        return;
+      }
+
+      syncAuthenticatedUser();
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const value = useMemo<AppContextValue>(
     () => ({

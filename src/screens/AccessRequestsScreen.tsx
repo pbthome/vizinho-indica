@@ -5,8 +5,9 @@ import { AppButton } from '../components/AppButton';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { spacing } from '../constants/spacing';
+import { isAdmin } from '../navigation/guards';
 import { useApp } from '../services/AppContext';
-import { approveAccessRequest, getAccessRequests, rejectAccessRequest } from '../services/mockApi';
+import { approveAccessRequest, getAccessRequests, rejectAccessRequest } from '../services/api';
 import { AccessRequest } from '../types';
 import { commonStyles } from './styles';
 
@@ -15,9 +16,12 @@ export function AccessRequestsScreen({ navigation }: any) {
   const [requests, setRequests] = useState<AccessRequest[]>([]);
 
   const load = useCallback(() => {
-    if (!user) return;
+    if (!user || !isAdmin(user)) {
+      navigation.replace('Resident');
+      return;
+    }
     getAccessRequests(user.condominiumId).then(setRequests);
-  }, [user]);
+  }, [navigation, user]);
 
   useFocusEffect(load);
 
