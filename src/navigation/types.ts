@@ -3,6 +3,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type AuthStackParamList = {
   Splash: undefined;
   Welcome: { mode?: 'login' } | undefined;
+  ResetPassword: { email?: string; mode?: 'code' | 'link' } | undefined;
   Onboarding: undefined;
   SignUp: undefined;
   WaitingApproval: undefined;
@@ -11,6 +12,7 @@ export type AuthStackParamList = {
 
 export type ResidentTabsParamList = {
   Home: { focusRecommendationId?: string } | undefined;
+  Providers: undefined;
   Dashboard: undefined;
   Management: undefined;
   Profile: undefined;

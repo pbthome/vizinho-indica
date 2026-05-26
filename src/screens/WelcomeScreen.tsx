@@ -14,8 +14,8 @@ import { getBackendMode, getBackendStatusMessage } from '../services/supabase/co
 export function WelcomeScreen({ navigation, route }: any) {
   const { setUser } = useApp();
   const [mode, setMode] = useState<'default' | 'login'>(route.params?.mode === 'login' ? 'login' : 'default');
-  const [email, setEmail] = useState('pedro@vizinho.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const loginProgress = useRef(new Animated.Value(mode === 'login' ? 1 : 0)).current;
@@ -83,9 +83,15 @@ export function WelcomeScreen({ navigation, route }: any) {
       return;
     }
 
+    if (!/\S+@\S+\.\S+/.test(email.trim())) {
+      Alert.alert('Revise o email', 'Informe um email valido para recuperar a senha.');
+      return;
+    }
+
     try {
       await resetPassword(email.trim());
-      Alert.alert('Email enviado', 'Se o email existir, voce recebera as instrucoes de recuperacao.');
+      Alert.alert('Codigo enviado', 'Se o email existir, voce recebera um codigo de recuperacao para definir a nova senha no app.');
+      navigation.navigate('ResetPassword', { email: email.trim().toLowerCase(), mode: 'code' });
     } catch (error) {
       Alert.alert('Nao foi possivel enviar', getFriendlyAuthErrorMessage(error));
     }
@@ -136,8 +142,8 @@ export function WelcomeScreen({ navigation, route }: any) {
                 ]}
               >
                 <View style={styles.loginFields}>
-                  <AppInput label="Email" value={email} onChangeText={updateEmail} autoCapitalize="none" keyboardType="email-address" />
-                  <AppInput label="Senha" value={password} onChangeText={updatePassword} secureTextEntry />
+                  <AppInput label="Email" placeholder="email" value={email} onChangeText={updateEmail} autoCapitalize="none" keyboardType="email-address" />
+                  <AppInput label="Senha" placeholder="senha" value={password} onChangeText={updatePassword} secureTextEntry />
                 </View>
                 {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
                 <AppButton title="Entrar" onPress={submitLogin} loading={loading} style={styles.primaryButton} />

@@ -20,7 +20,7 @@ export async function uploadReviewPhoto(params: {
   const extension = getImageExtension(blob.type, params.uri);
   const storagePath = `${params.condominiumId}/${params.providerId}/${params.reviewId}/${params.userId}-${Date.now()}.${extension}`;
 
-  const arrayBuffer = await blob.arrayBuffer();
+  const arrayBuffer = await blobToArrayBuffer(blob);
   const { error } = await supabase.storage.from(REVIEW_PHOTOS_BUCKET).upload(storagePath, arrayBuffer, {
     contentType: blob.type || `image/${extension}`,
     upsert: false
@@ -28,6 +28,31 @@ export async function uploadReviewPhoto(params: {
 
   if (error) throw new Error(error.message);
   return storagePath;
+}
+
+async function blobToArrayBuffer(blob: Blob) {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer();
+  }
+
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      reject(new Error('Nao foi possivel preparar a foto para envio.'));
+    };
+
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Formato de foto nao suportado para envio.'));
+    };
+
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 export async function createReviewPhotoUrls(paths: string[]) {

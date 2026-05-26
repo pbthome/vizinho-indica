@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { DEFAULT_CONDOMINIUM_SLUG } from '../services/supabase/config';
 import { supabase } from '../services/supabase/client';
 import { SignUpPayload, User } from '../types';
@@ -78,8 +79,33 @@ export async function signOut() {
 }
 
 export async function sendPasswordReset(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: getPasswordResetRedirectTo()
+  });
   if (error) throw new Error(error.message);
+}
+
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+}
+
+export async function resetPasswordWithCode(email: string, token: string, password: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedToken = token.trim();
+
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    email: normalizedEmail,
+    token: normalizedToken,
+    type: 'recovery'
+  });
+
+  if (verifyError) throw new Error(verifyError.message);
+
+  const { error: updateError } = await supabase.auth.updateUser({ password });
+  if (updateError) throw new Error(updateError.message);
+
+  await supabase.auth.signOut().catch(() => undefined);
 }
 
 async function getProfileByAuthUserId(authUserId: string) {
@@ -98,4 +124,12 @@ function splitUnit(unit: string) {
   const block = unit.match(/Quadra\s+([^,]+)/i)?.[1]?.trim() ?? '';
   const apartment = unit.match(/Lote\s+(.+)$/i)?.[1]?.trim() ?? '';
   return { block, apartment };
+}
+
+function getPasswordResetRedirectTo() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/?screen=reset-password`;
+  }
+
+  return undefined;
 }

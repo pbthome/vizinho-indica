@@ -2,6 +2,7 @@ import { supabase } from '../services/supabase/client';
 import { AccessRequest, Feedback, Report, User } from '../types';
 import { Tables } from '../types/database';
 import { mapDbFeedback } from './mappers';
+import { createReviewPhotoUrls } from './storageRepository';
 
 export async function fetchAllAccessRequests(condominiumId: string) {
   const { data, error } = await supabase
@@ -146,6 +147,11 @@ export async function listModerationContent(condominiumId: string): Promise<Back
 
   if (error) throw new Error(error.message);
 
+  const reviewPhotoPaths = (data ?? []).flatMap((review: any) =>
+    (review.review_photos ?? []).filter((photo: any) => !photo.deleted_at).map((photo: any) => photo.storage_path)
+  );
+  const signedUrls = await createReviewPhotoUrls(reviewPhotoPaths);
+
   return (data ?? []).flatMap((review: any) => {
     const base = {
       recommendationId: review.provider_id,
@@ -159,19 +165,22 @@ export async function listModerationContent(condominiumId: string): Promise<Back
     const items: BackendModerationContentItem[] = [
       {
         ...base,
+        id: `review:${review.id}`,
+        type: 'review',
+        title: `Avaliacao ${review.rating}`,
+        body: review.comment_deleted_at ? 'Avaliacao sem comentario visivel.' : review.comment
+      }
+    ];
+
+    if (!review.comment_deleted_at) {
+      items.unshift({
+        ...base,
         id: `comment:${review.id}`,
         type: 'comment',
         title: 'Comentario',
         body: review.comment
-      },
-      {
-        ...base,
-        id: `review:${review.id}`,
-        type: 'review',
-        title: `Avaliacao ${review.rating}`,
-        body: review.comment
-      }
-    ];
+      });
+    }
 
     for (const photo of review.review_photos ?? []) {
       if (photo.deleted_at) continue;
@@ -181,7 +190,7 @@ export async function listModerationContent(condominiumId: string): Promise<Back
         type: 'photo',
         title: 'Foto da avaliacao',
         body: review.comment,
-        photoUri: photo.storage_path
+        photoUri: signedUrls.get(photo.storage_path) ?? photo.storage_path
       });
     }
 
@@ -198,6 +207,20 @@ export async function moderateReview(admin: User, reviewId: string, reason: stri
       moderation_reason: reason
     })
     .eq('id', reviewId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function moderateReviewComment(admin: User, reviewId: string, reason: string) {
+  const { error } = await supabase
+    .from('reviews')
+    .update({
+      comment_deleted_at: new Date().toISOString(),
+      comment_deleted_by: admin.id,
+      comment_moderation_reason: reason
+    })
+    .eq('id', reviewId)
+    .is('comment_deleted_at', null);
 
   if (error) throw new Error(error.message);
 }

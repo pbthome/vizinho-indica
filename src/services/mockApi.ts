@@ -11,6 +11,7 @@ import { normalizePhoneNumber } from '../utils/phone';
 import { isSupabaseConfigured } from './supabase/config';
 import {
   getCurrentProfile,
+  resetPasswordWithCode as resetPasswordWithCodeFromRepository,
   signInWithPassword,
   signOut as supabaseSignOut,
   sendPasswordReset,
@@ -32,6 +33,7 @@ import {
   listFeedbacks,
   listModerationContent,
   listReports,
+  moderateReviewComment,
   moderateReview,
   moderateReviewPhoto,
   resolveReport,
@@ -131,6 +133,14 @@ export async function logout() {
 export async function resetPassword(email: string) {
   if (isSupabaseConfigured()) {
     await sendPasswordReset(email);
+    return;
+  }
+  await wait();
+}
+
+export async function resetPasswordWithCode(email: string, code: string, password: string) {
+  if (isSupabaseConfigured()) {
+    await resetPasswordWithCodeFromRepository(email, code, password);
     return;
   }
   await wait();
@@ -582,6 +592,8 @@ export async function moderateContent(
     const reasonText = reason.trim() || 'Removido pela moderacao';
     if (target.type === 'photo') {
       await moderateReviewPhoto(admin, target.contentId?.replace('photo:', '') ?? '', reasonText);
+    } else if (target.type === 'comment' && target.reviewId) {
+      await moderateReviewComment(admin, target.reviewId, reasonText);
     } else if (target.reviewId) {
       await moderateReview(admin, target.reviewId, reasonText);
     }

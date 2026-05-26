@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { Archive, Check, MessageSquareText, Search, ShieldAlert, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { colors } from '../constants/colors';
@@ -58,9 +58,12 @@ export function ManagementScreen({ navigation }: any) {
     moderation: true
   });
   const [loadWarning, setLoadWarning] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [moderationItems, setModerationItems] = useState<ModerationContentItem[]>([]);
+  const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
+  const [pendingModerationItem, setPendingModerationItem] = useState<ModerationContentItem | null>(null);
 
   console.log('[ManagementScreen] render snapshot', {
     section,
@@ -207,6 +210,20 @@ export function ManagementScreen({ navigation }: any) {
     });
   }, [filter, loadAccessRequests, section, user]);
 
+  useEffect(() => {
+    if (!actionFeedback) return;
+
+    const timeoutId = setTimeout(() => {
+      setActionFeedback(null);
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [actionFeedback]);
+
+  useEffect(() => {
+    setActionFeedback(null);
+  }, [section, filter]);
+
   const pendingRequests = accessRequests.filter((item) => item.status === 'pending').length;
   const newFeedbacks = feedbacks.filter((item) => item.status === 'novo').length;
   const moderationCount = moderationItems.length;
@@ -347,8 +364,45 @@ export function ManagementScreen({ navigation }: any) {
     await load();
   }
 
+  async function runModerationAction(item: ModerationContentItem) {
+    if (!user) return;
+
+    setActionFeedback(null);
+    setPendingModerationItem(null);
+
+    try {
+      await moderateContent(
+        user,
+        {
+          contentId: item.id,
+          type: item.type,
+          recommendationId: item.recommendationId,
+          reviewId: item.reviewId,
+          photoUri: item.photoUri
+        },
+        `Removido pela Gest?o: ${moderationTypeLabels[item.type]}`
+      );
+
+      setModerationItems((current) => removeModerationItemFromList(current, item));
+      setActionFeedback({
+        tone: 'success',
+        message: getModerationSuccessMessage(item.type)
+      });
+
+      await load();
+    } catch (error) {
+      setActionFeedback({
+        tone: 'error',
+        message: `Nao foi possivel remover: ${getLoadErrorMessage(error)}.`
+      });
+    }
+  }
+
   function removeContent(item: ModerationContentItem) {
     if (!user) return;
+
+    setPendingModerationItem(item);
+    return;
 
     Alert.alert('Remover conteúdo?', 'O item será escondido do app, mas o histórico ficará salvo para auditoria.', [
       { text: 'Cancelar', style: 'cancel' },
@@ -356,8 +410,11 @@ export function ManagementScreen({ navigation }: any) {
         text: 'Remover',
         style: 'destructive',
         onPress: async () => {
-          await moderateContent(
-            user,
+          void runModerationAction(item);
+          return;
+          try {
+            await moderateContent(
+            user as NonNullable<typeof user>,
             {
               contentId: item.id,
               type: item.type,
@@ -367,7 +424,11 @@ export function ManagementScreen({ navigation }: any) {
             },
             `Removido pela Gestão: ${moderationTypeLabels[item.type]}`
           );
-          await load();
+            await load();
+            Alert.alert('Conteudo removido', `${moderationTypeLabels[item.type]} removido com sucesso.`);
+          } catch (error) {
+            Alert.alert('Nao foi possivel remover', getLoadErrorMessage(error));
+          }
         }
       }
     ]);
@@ -418,11 +479,23 @@ export function ManagementScreen({ navigation }: any) {
           />
         </View>
 
-        <FilterRow section={section} selected={filter} onSelect={setFilter} />
+        {section === 'moderation' ? (
+          <ModerationFilterRow selected={filter} onSelect={setFilter} />
+        ) : (
+          <FilterRow section={section} selected={filter} onSelect={setFilter} />
+        )}
 
         {loadWarning ? (
           <View style={styles.mockNote}>
             <Text style={styles.mockNoteText}>{loadWarning}</Text>
+          </View>
+        ) : null}
+
+        {actionFeedback ? (
+          <View style={[styles.mockNote, actionFeedback.tone === 'error' ? styles.feedbackError : styles.feedbackSuccess]}>
+            <Text style={[styles.mockNoteText, actionFeedback.tone === 'error' ? styles.feedbackErrorText : styles.feedbackSuccessText]}>
+              {actionFeedback.message}
+            </Text>
           </View>
         ) : null}
 
@@ -456,16 +529,23 @@ export function ManagementScreen({ navigation }: any) {
         {!loading && section === 'moderation' ? (
           <View style={styles.list}>
             {filteredModerationItems.length ? (
-              filteredModerationItems.map((item) => <ModerationCard key={item.id} item={item} onRemove={() => removeContent(item)} />)
+              filteredModerationItems.map((item) => (
+                <ModerationCard key={item.id} item={item} onRemove={() => removeContent(item)} onOpenPhoto={setPreviewPhotoUri} />
+              ))
             ) : (
               <EmptyState title="Nenhum conteúdo encontrado para moderação." />
             )}
           </View>
         ) : null}
 
-        <View style={styles.mockNote}>
-          <Text style={styles.mockNoteText}>As aprovacoes, feedbacks e moderacoes desta tela usam o backend configurado no app.</Text>
-        </View>
+        <ModerationConfirmModal
+          item={pendingModerationItem}
+          onCancel={() => setPendingModerationItem(null)}
+          onConfirm={(item) => {
+            void runModerationAction(item);
+          }}
+        />
+        <PhotoPreview uri={previewPhotoUri} onClose={() => setPreviewPhotoUri(null)} />
       </View>
     </ScreenContainer>
   );
@@ -489,6 +569,24 @@ function FilterRow({ section, selected, onSelect }: { section: Section; selected
             { id: 'photo' as const, label: 'Fotos' },
             { id: 'review' as const, label: 'Avaliações' }
           ];
+
+  return (
+    <View style={styles.filterRow}>
+      {filters.map((item) => (
+        <Pressable key={item.id} accessibilityRole="button" onPress={() => onSelect(item.id)} style={[styles.filterChip, selected === item.id && styles.filterChipActive]}>
+          <Text style={[styles.filterChipText, selected === item.id && styles.filterChipTextActive]}>{item.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function ModerationFilterRow({ selected, onSelect }: { selected: StatusFilter; onSelect: (value: StatusFilter) => void }) {
+  const filters = [
+    { id: 'review' as const, label: 'Avaliação' },
+    { id: 'comment' as const, label: 'Comentários' },
+    { id: 'photo' as const, label: 'Fotos' }
+  ];
 
   return (
     <View style={styles.filterRow}>
@@ -558,7 +656,15 @@ function FeedbackCard({ item, onRead, onArchive }: { item: Feedback; onRead: () 
   );
 }
 
-function ModerationCard({ item, onRemove }: { item: ModerationContentItem; onRemove: () => void }) {
+function ModerationCard({
+  item,
+  onRemove,
+  onOpenPhoto
+}: {
+  item: ModerationContentItem;
+  onRemove: () => void;
+  onOpenPhoto: (uri: string) => void;
+}) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -569,13 +675,64 @@ function ModerationCard({ item, onRemove }: { item: ModerationContentItem; onRem
         <Badge label={moderationTypeLabels[item.type]} tone={item.type === 'photo' ? 'neutral' : 'warning'} />
       </View>
 
-      {item.photoUri ? <Image source={{ uri: item.photoUri }} style={styles.photoPreview} /> : null}
+      {item.photoUri ? (
+        <Pressable onPress={() => onOpenPhoto(item.photoUri!)} style={styles.photoPreviewButton}>
+          <Image source={{ uri: item.photoUri }} style={styles.photoPreview} />
+          <View style={styles.photoPreviewHint}>
+            <Text style={styles.photoPreviewHintText}>Toque para ampliar</Text>
+          </View>
+        </Pressable>
+      ) : null}
       <Text style={styles.cardBody}>{item.body}</Text>
 
       <View style={styles.actionRow}>
-        <IconAction title={item.type === 'review' ? 'Remover avaliação' : item.type === 'photo' ? 'Remover foto' : 'Remover comentário'} icon={<Trash2 color={colors.surface} size={16} />} onPress={onRemove} danger />
+        <IconAction title={getModerationActionButtonLabel(item.type)} icon={<Trash2 color={colors.surface} size={16} />} onPress={onRemove} danger />
       </View>
     </View>
+  );
+}
+
+function ModerationConfirmModal({
+  item,
+  onCancel,
+  onConfirm
+}: {
+  item: ModerationContentItem | null;
+  onCancel: () => void;
+  onConfirm: (item: ModerationContentItem) => void;
+}) {
+  return (
+    <Modal visible={Boolean(item)} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.confirmBackdrop}>
+        <View style={styles.confirmCard}>
+          <Text style={styles.confirmTitle}>{item ? getModerationConfirmTitle(item.type) : ''}</Text>
+          <Text style={styles.confirmText}>{item ? getModerationConfirmMessage(item.type) : ''}</Text>
+          <View style={styles.confirmActions}>
+            <Pressable style={styles.confirmCancelButton} onPress={onCancel}>
+              <Text style={styles.confirmCancelText}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              style={styles.confirmDangerButton}
+              onPress={() => {
+                if (item) onConfirm(item);
+              }}
+            >
+              <Text style={styles.confirmDangerText}>{item ? getModerationConfirmButtonLabel(item.type) : 'Confirmar'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function PhotoPreview({ uri, onClose }: { uri: string | null; onClose: () => void }) {
+  return (
+    <Modal visible={Boolean(uri)} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.fullscreenPhotoBackdrop} onPress={onClose}>
+        {uri ? <Image source={{ uri }} style={styles.fullscreenPhoto} resizeMode="contain" /> : null}
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -680,6 +837,44 @@ function applyAccessRequestLocalUpdate(
       ? { ...request, status: newStatus }
       : request
   );
+}
+
+function removeModerationItemFromList(items: ModerationContentItem[], target: ModerationContentItem) {
+  if (target.type === 'review') {
+    return items.filter((item) => item.reviewId !== target.reviewId);
+  }
+
+  return items.filter((item) => item.id !== target.id);
+}
+
+function getModerationActionButtonLabel(type: ModerationContentType) {
+  if (type === 'review') return 'Remover avaliação inteira';
+  if (type === 'comment') return 'Remover só comentário';
+  return 'Remover só foto';
+}
+
+function getModerationConfirmTitle(type: ModerationContentType) {
+  if (type === 'review') return 'Remover avaliação?';
+  if (type === 'comment') return 'Remover comentário?';
+  return 'Remover foto?';
+}
+
+function getModerationConfirmMessage(type: ModerationContentType) {
+  if (type === 'review') return 'Essa ação remove a avaliação inteira, incluindo comentário, foto e nota.';
+  if (type === 'comment') return 'Essa ação remove apenas o comentário. A foto e a nota continuam visíveis.';
+  return 'Essa ação remove apenas a foto. O comentário e a nota continuam visíveis.';
+}
+
+function getModerationConfirmButtonLabel(type: ModerationContentType) {
+  if (type === 'review') return 'Remover avaliação';
+  if (type === 'comment') return 'Remover comentário';
+  return 'Remover foto';
+}
+
+function getModerationSuccessMessage(type: ModerationContentType) {
+  if (type === 'review') return 'Avaliação removida com sucesso.';
+  if (type === 'comment') return 'Comentário removido com sucesso.';
+  return 'Foto removida com sucesso.';
 }
 
 async function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 8000) {
@@ -1061,6 +1256,105 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.muted
   },
+  photoPreviewButton: {
+    borderRadius: 14,
+    overflow: 'hidden'
+  },
+  photoPreviewHint: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(8, 18, 15, 0.78)',
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  photoPreviewHintText: {
+    color: colors.surface,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  fullscreenPhotoBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 18, 15, 0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg
+  },
+  fullscreenPhoto: {
+    width: '100%',
+    height: '78%',
+    borderRadius: 20
+  },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 18, 15, 0.38)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    padding: spacing.lg,
+    gap: spacing.sm
+  },
+  confirmTitle: {
+    color: colors.text,
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '900',
+    fontFamily: typography.fontFamily
+  },
+  confirmText: {
+    color: colors.secondaryText,
+    fontSize: typography.small,
+    lineHeight: 20,
+    fontFamily: typography.fontFamily
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs
+  },
+  confirmCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#DDE9E4',
+    backgroundColor: '#FBFCFB',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  confirmCancelText: {
+    color: colors.text,
+    fontSize: typography.small,
+    lineHeight: 18,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  confirmDangerButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 15,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  confirmDangerText: {
+    color: colors.surface,
+    fontSize: typography.small,
+    lineHeight: 18,
+    fontWeight: '900',
+    fontFamily: typography.fontFamily
+  },
   mockNote: {
     borderRadius: 16,
     backgroundColor: '#EEF7F3',
@@ -1075,8 +1369,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: typography.fontFamily
   },
+  feedbackSuccess: {
+    backgroundColor: '#E7F3EF',
+    borderColor: '#CFE4DA'
+  },
+  feedbackSuccessText: {
+    color: colors.primary
+  },
+  feedbackError: {
+    backgroundColor: '#FEE4E2',
+    borderColor: '#F6C7C2'
+  },
+  feedbackErrorText: {
+    color: colors.error
+  },
   pressed: {
     opacity: 0.86
   }
 });
+
 

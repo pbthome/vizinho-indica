@@ -158,33 +158,42 @@ export function AddRecommendationScreen() {
     };
 
     setLoading(true);
-    if (contextualProvider) {
-      const result = await addReviewToExistingRecommendation(user, contextualProvider.id, payload);
-      setSuccessTarget({ type: 'provider', recommendationId: contextualProvider.id, reviewId: result?.reviews[0]?.id });
-    } else {
-      const result = await addRecommendation(user, payload);
-      setSuccessTarget({ type: 'home', recommendationId: result.id });
+    try {
+      if (contextualProvider) {
+        const result = await addReviewToExistingRecommendation(user, contextualProvider.id, payload);
+        setSuccessTarget({ type: 'provider', recommendationId: contextualProvider.id, reviewId: result?.reviews[0]?.id });
+      } else {
+        const result = await addRecommendation(user, payload);
+        setSuccessTarget({ type: 'home', recommendationId: result.id });
+      }
+
+      setSupplierName('');
+      setServiceSpecialtyId('');
+      setServiceSearch('');
+      setCustomServiceDescription('');
+      setWhatsapp('');
+      setServicePerformed('');
+      setUsedWhen(null);
+      setRating(0);
+      setWouldHireAgain(null);
+      setComment('');
+      setPhotos([]);
+      setErrors({});
+      navigation.setParams?.({ providerId: undefined });
+      setSuccessMessage(
+        wasAddingToExistingProvider
+          ? 'Sua experiência foi adicionada ao perfil do prestador.'
+          : 'Sua indicação foi compartilhada com a comunidade.'
+      );
+      return;
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim()
+        ? error.message.trim()
+        : 'Nao foi possivel enviar sua avaliacao com as fotos.';
+      Alert.alert('Nao foi possivel enviar', message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    setSupplierName('');
-    setServiceSpecialtyId('');
-    setServiceSearch('');
-    setCustomServiceDescription('');
-    setWhatsapp('');
-    setServicePerformed('');
-    setUsedWhen(null);
-    setRating(0);
-    setWouldHireAgain(null);
-    setComment('');
-    setPhotos([]);
-    setErrors({});
-    navigation.setParams?.({ providerId: undefined });
-    setSuccessMessage(
-      wasAddingToExistingProvider
-        ? 'Sua experiência foi adicionada ao perfil do prestador.'
-        : 'Sua indicação foi compartilhada com a comunidade.'
-    );
-    return;
   }
 
   async function pickPhotos() {

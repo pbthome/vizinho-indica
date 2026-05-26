@@ -43,11 +43,17 @@ export function mapDbReview(row: Tables<'reviews'> & { users?: Pick<Tables<'user
     usedWhen: row.used_when ?? undefined,
     realUseConfirmed: row.real_use_confirmed,
     rating: row.rating,
-    comment: row.comment,
+    comment: row.comment_deleted_at ? 'Comentário removido pela moderação.' : row.comment,
     wouldHireAgain: row.would_hire_again,
     photos: row.review_photos?.filter((photo) => !photo.deleted_at).map((photo) => photo.storage_path) ?? [],
     createdAt: row.created_at.slice(0, 10),
-    uploadedAt: row.created_at
+    uploadedAt: row.created_at,
+    commentDeletedAt: row.comment_deleted_at ?? undefined,
+    commentDeletedBy: row.comment_deleted_by ?? undefined,
+    commentModerationReason: row.comment_moderation_reason ?? undefined,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedBy: row.deleted_by ?? undefined,
+    moderationReason: row.moderation_reason ?? undefined
   };
 }
 
@@ -69,7 +75,7 @@ export function mapDbProvider(row: ProviderWithRelations): Recommendation {
     contactInfo: row.description ?? 'Contato informado por morador.',
     averageRating: Number(row.average_rating ?? 0),
     recommendedByCount: row.total_reviews,
-    shortComment: latestReview?.comment ?? row.description ?? '',
+    shortComment: latestReview?.commentDeletedAt ? 'Comentario removido pela moderacao.' : latestReview?.comment ?? row.description ?? '',
     servicePerformed: latestReview?.servicePerformed ?? row.description ?? undefined,
     usedWhen: latestReview?.usedWhen,
     realUseConfirmed: latestReview?.realUseConfirmed,
