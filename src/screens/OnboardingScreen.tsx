@@ -29,7 +29,7 @@ export function OnboardingScreen({ navigation }: any) {
     <ScreenContainer>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Text style={styles.title}>Como a comunidade ajuda{'\n'}você a contratar melhor</Text>
+          <Text style={styles.title}>Como a comunidade ajuda você a contratar melhor</Text>
           <Text style={styles.subtitle}>Vicini organiza a confiança que já existe entre moradores para reduzir risco na escolha de um profissional.</Text>
         </View>
 

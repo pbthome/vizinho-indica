@@ -316,7 +316,7 @@ export function getPhoneValidation(phone: string, country?: PhoneCountry) {
       isValid: false,
       country: selectedCountry,
       nationalDigits,
-      message: missing === 1 ? 'Falta 1 digito no telefone.' : `Faltam ${missing} digitos no telefone.`
+      message: missing === 1 ? 'Falta 1 dígito no telefone.' : `Faltam ${missing} dígitos no telefone.`
     };
   }
 
@@ -325,7 +325,7 @@ export function getPhoneValidation(phone: string, country?: PhoneCountry) {
       isValid: false,
       country: selectedCountry,
       nationalDigits,
-      message: `O telefone deve ter no maximo ${selectedCountry.maxDigits} digitos.`
+      message: `O telefone deve ter no máximo ${selectedCountry.maxDigits} dígitos.`
     };
   }
 

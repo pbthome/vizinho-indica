@@ -25,8 +25,8 @@ export function getBackendStatusMessage() {
   const urlPreview = SUPABASE_URL ? SUPABASE_URL.replace(/^https?:\/\//, '').slice(0, 24) : '(vazio)';
 
   if (process.env.EXPO_PUBLIC_SUPABASE_ENABLED === 'true') {
-    return `Supabase foi habilitado, mas a configuracao nao ficou disponivel no app. enabled=${enabledValue}; urlOk=${urlOk ? 'sim' : 'nao'}; keyLen=${keyLength}; url=${urlPreview}.`;
+    return `Supabase foi habilitado, mas a configuração não ficou disponível no app. enabled=${enabledValue}; urlOk=${urlOk ? 'sim' : 'não'}; keyLen=${keyLength}; url=${urlPreview}.`;
   }
 
-  return `Aplicativo em modo demonstracao com dados simulados. enabled=${enabledValue}; urlOk=${urlOk ? 'sim' : 'nao'}; keyLen=${keyLength}; url=${urlPreview}.`;
+  return `Aplicativo em modo demonstração com dados simulados. enabled=${enabledValue}; urlOk=${urlOk ? 'sim' : 'não'}; keyLen=${keyLength}; url=${urlPreview}.`;
 }

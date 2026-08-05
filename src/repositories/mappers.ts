@@ -1,5 +1,6 @@
 import { Feedback, Recommendation, Review, User } from '../types';
 import { Tables } from '../types/database';
+import { toAmericanNameCase } from '../utils/name';
 
 type ProviderWithRelations = Tables<'providers'> & {
   provider_categories?: Pick<Tables<'provider_categories'>, 'id' | 'name'> | null;
@@ -43,11 +44,17 @@ export function mapDbReview(row: Tables<'reviews'> & { users?: Pick<Tables<'user
     usedWhen: row.used_when ?? undefined,
     realUseConfirmed: row.real_use_confirmed,
     rating: row.rating,
-    comment: row.comment,
+    comment: row.comment_deleted_at ? 'Comentário removido pela moderação.' : row.comment,
     wouldHireAgain: row.would_hire_again,
     photos: row.review_photos?.filter((photo) => !photo.deleted_at).map((photo) => photo.storage_path) ?? [],
     createdAt: row.created_at.slice(0, 10),
-    uploadedAt: row.created_at
+    uploadedAt: row.created_at,
+    commentDeletedAt: row.comment_deleted_at ?? undefined,
+    commentDeletedBy: row.comment_deleted_by ?? undefined,
+    commentModerationReason: row.comment_moderation_reason ?? undefined,
+    deletedAt: row.deleted_at ?? undefined,
+    deletedBy: row.deleted_by ?? undefined,
+    moderationReason: row.moderation_reason ?? undefined
   };
 }
 
@@ -58,18 +65,21 @@ export function mapDbProvider(row: ProviderWithRelations): Recommendation {
   return {
     id: row.id,
     condominiumId: row.condominium_id,
-    supplierName: row.name,
+    supplierName: toAmericanNameCase(row.name),
     categoryId: row.provider_categories?.id ?? row.category_id ?? 'outros',
     categoryName: row.provider_categories?.name ?? 'Outros',
     serviceSpecialtyId: row.provider_specialties?.id ?? row.service_specialty_id ?? undefined,
     serviceSpecialtyName: row.provider_specialties?.name ?? row.service_specialty_name ?? undefined,
+    additionalServiceSpecialtyIds: row.additional_service_specialty_ids ?? [],
+    additionalServiceSpecialtyNames: row.additional_service_specialty_names ?? [],
     customServiceDescription: row.custom_service_description ?? undefined,
+    businessDescription: row.business_description ?? undefined,
     whatsapp: row.whatsapp ?? row.phone ?? '',
     normalizedPhone: row.phone ?? row.whatsapp ?? '',
     contactInfo: row.description ?? 'Contato informado por morador.',
     averageRating: Number(row.average_rating ?? 0),
     recommendedByCount: row.total_reviews,
-    shortComment: latestReview?.comment ?? row.description ?? '',
+    shortComment: latestReview?.commentDeletedAt ? 'Comentário removido pela moderação.' : latestReview?.comment ?? row.description ?? '',
     servicePerformed: latestReview?.servicePerformed ?? row.description ?? undefined,
     usedWhen: latestReview?.usedWhen,
     realUseConfirmed: latestReview?.realUseConfirmed,

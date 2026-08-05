@@ -14,13 +14,13 @@ export async function uploadReviewPhoto(params: {
   const blob = await response.blob();
 
   if (blob.size > MAX_IMAGE_BYTES) {
-    throw new Error('A foto precisa ter no maximo 5 MB.');
+    throw new Error('A foto precisa ter no máximo 5 MB.');
   }
 
   const extension = getImageExtension(blob.type, params.uri);
   const storagePath = `${params.condominiumId}/${params.providerId}/${params.reviewId}/${params.userId}-${Date.now()}.${extension}`;
 
-  const arrayBuffer = await blob.arrayBuffer();
+  const arrayBuffer = await blobToArrayBuffer(blob);
   const { error } = await supabase.storage.from(REVIEW_PHOTOS_BUCKET).upload(storagePath, arrayBuffer, {
     contentType: blob.type || `image/${extension}`,
     upsert: false
@@ -28,6 +28,31 @@ export async function uploadReviewPhoto(params: {
 
   if (error) throw new Error(error.message);
   return storagePath;
+}
+
+async function blobToArrayBuffer(blob: Blob) {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer();
+  }
+
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      reject(new Error('Não foi possível preparar a foto para envio.'));
+    };
+
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Formato de foto não suportado para envio.'));
+    };
+
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 export async function createReviewPhotoUrls(paths: string[]) {

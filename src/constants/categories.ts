@@ -8,7 +8,9 @@ export const categories: Category[] = [
   { id: 'pets', name: 'Pets', icon: 'paw', sortOrder: 5 },
   { id: 'reformas', name: 'Reformas', icon: 'paintbrush', sortOrder: 6 },
   { id: 'beleza_bem_estar', name: 'Beleza e Bem-estar', icon: 'heart', sortOrder: 7 },
-  { id: 'outros', name: 'Outros', icon: 'more', sortOrder: 8 }
+  { id: 'casa_decoracao', name: 'Casa e decoração', icon: 'home', sortOrder: 8 },
+  { id: 'automotivo', name: 'Automotivo', icon: 'car', sortOrder: 9 },
+  { id: 'outros', name: 'Outros', icon: 'more', sortOrder: 10 }
 ];
 
 export const serviceSpecialties: ServiceSpecialty[] = [
@@ -35,7 +37,7 @@ export const serviceSpecialties: ServiceSpecialty[] = [
   { id: 'buffet', name: 'Buffet', categoryId: 'alimentacao', icon: 'utensils', aliases: ['festa', 'evento'], sortOrder: 30 },
   { id: 'congelados', name: 'Congelados', categoryId: 'alimentacao', icon: 'utensils', aliases: ['comida congelada', 'marmitas congeladas'], sortOrder: 31 },
 
-  { id: 'banho_tosa', name: 'Banho e tosa', categoryId: 'pets', icon: 'paw', aliases: ['pet shop', 'tosa'], sortOrder: 32 },
+  { id: 'banho_tosa', name: 'Petshop', categoryId: 'pets', icon: 'paw', aliases: ['pet shop', 'banho e tosa', 'tosa'], sortOrder: 32 },
   { id: 'dog_walker', name: 'Dog walker', categoryId: 'pets', icon: 'paw', aliases: ['passeador', 'passeio com cachorro', 'cães'], sortOrder: 33 },
   { id: 'pet_sitter', name: 'Pet sitter', categoryId: 'pets', icon: 'paw', aliases: ['cuidador pet', 'petsitter', 'cuidar de pet'], sortOrder: 34 },
   { id: 'veterinario', name: 'Veterinário', categoryId: 'pets', icon: 'paw', aliases: ['vet', 'veterinária'], sortOrder: 35 },
@@ -45,11 +47,31 @@ export const serviceSpecialties: ServiceSpecialty[] = [
   { id: 'marceneiro', name: 'Marceneiro', categoryId: 'reformas', icon: 'paintbrush', aliases: ['marcenaria', 'móveis'], sortOrder: 37 },
   { id: 'gesseiro', name: 'Gesseiro', categoryId: 'reformas', icon: 'paintbrush', aliases: ['gesso', 'drywall'], sortOrder: 38 },
   { id: 'serralheiro', name: 'Serralheiro', categoryId: 'reformas', icon: 'paintbrush', aliases: ['serralheria', 'portão'], sortOrder: 39 },
+  { id: 'construtora', name: 'Construtora', categoryId: 'reformas', icon: 'paintbrush', aliases: ['construção civil', 'empresa de obras', 'obra completa'], sortOrder: 44 },
+  { id: 'empreiteiro', name: 'Empreiteiro', categoryId: 'reformas', icon: 'paintbrush', aliases: ['empreitada', 'obra'], sortOrder: 45 },
+  { id: 'arquiteto', name: 'Arquiteto', categoryId: 'reformas', icon: 'paintbrush', aliases: ['arquitetura', 'projeto arquitetônico'], sortOrder: 46 },
+  { id: 'engenheiro_civil', name: 'Engenheiro civil', categoryId: 'reformas', icon: 'paintbrush', aliases: ['engenharia', 'responsável técnico'], sortOrder: 47 },
+  { id: 'projetos', name: 'Projetos', categoryId: 'reformas', icon: 'paintbrush', aliases: ['projeto', 'planejamento de obra'], sortOrder: 48 },
+  { id: 'obras_residenciais', name: 'Obras residenciais', categoryId: 'reformas', icon: 'paintbrush', aliases: ['obra residencial', 'construção de casa'], sortOrder: 49 },
+  { id: 'obras_comerciais', name: 'Obras comerciais', categoryId: 'reformas', icon: 'paintbrush', aliases: ['obra comercial', 'loja', 'escritório'], sortOrder: 50 },
+  { id: 'reforma_completa', name: 'Reforma completa', categoryId: 'reformas', icon: 'paintbrush', aliases: ['reforma geral', 'reforma de casa'], sortOrder: 51 },
 
   { id: 'manicure', name: 'Manicure', categoryId: 'beleza_bem_estar', icon: 'heart', aliases: ['unha', 'pedicure'], sortOrder: 40 },
   { id: 'cabeleireira', name: 'Cabeleireira', categoryId: 'beleza_bem_estar', icon: 'heart', aliases: ['cabelo', 'corte'], sortOrder: 41 },
   { id: 'massagista', name: 'Massagista', categoryId: 'beleza_bem_estar', icon: 'heart', aliases: ['massagem'], sortOrder: 42 },
   { id: 'personal_trainer', name: 'Personal trainer', categoryId: 'beleza_bem_estar', icon: 'heart', aliases: ['personal', 'treino'], sortOrder: 43 },
+
+  { id: 'cortinas_persianas', name: 'Cortinas e persianas', categoryId: 'casa_decoracao', icon: 'home', aliases: ['cortina', 'persiana', 'produção de cortinas'], sortOrder: 52 },
+  { id: 'instalacao_cortinas', name: 'Instalação de cortinas', categoryId: 'casa_decoracao', icon: 'home', aliases: ['instalar cortina', 'instalação de persianas'], sortOrder: 53 },
+  { id: 'manutencao_persianas', name: 'Manutenção de persianas', categoryId: 'casa_decoracao', icon: 'home', aliases: ['conserto de persiana', 'reparo de persiana'], sortOrder: 54 },
+  { id: 'automacao_cortinas', name: 'Automação de cortinas', categoryId: 'casa_decoracao', icon: 'home', aliases: ['cortina automatizada', 'persiana automatizada'], sortOrder: 55 },
+  { id: 'tapeceiro', name: 'Tapeceiro', categoryId: 'casa_decoracao', icon: 'home', aliases: ['tapeçaria', 'reforma de sofá'], sortOrder: 56 },
+  { id: 'vidraceiro', name: 'Vidraceiro', categoryId: 'casa_decoracao', icon: 'home', aliases: ['vidro', 'espelho'], sortOrder: 57 },
+  { id: 'montador_moveis', name: 'Montador de móveis', categoryId: 'casa_decoracao', icon: 'home', aliases: ['montagem de móveis', 'montador'], sortOrder: 58 },
+  { id: 'moveis_planejados', name: 'Móveis planejados', categoryId: 'casa_decoracao', icon: 'home', aliases: ['móvel sob medida', 'marcenaria planejada'], sortOrder: 59 },
+  { id: 'decoracao', name: 'Decoração', categoryId: 'casa_decoracao', icon: 'home', aliases: ['decorador', 'design de interiores'], sortOrder: 60 },
+
+  { id: 'lava_jato', name: 'Lava-jato', categoryId: 'automotivo', icon: 'car', aliases: ['lava jato', 'lavagem de carro', 'lavagem automotiva', 'lavar carro'], sortOrder: 61 },
 
   { id: 'outros', name: 'Outros', categoryId: 'outros', icon: 'more', aliases: ['outro', 'diversos'], sortOrder: 999 }
 ];

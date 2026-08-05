@@ -76,6 +76,17 @@ function makeInsertBuilder(response) {
   };
 }
 
+function makeSearchBuilder(response) {
+  return {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    is: jest.fn().mockReturnThis(),
+    or: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue(response)
+  };
+}
+
 function makeProviderRow(overrides = {}) {
   return {
     id: 'provider-1',
@@ -134,18 +145,24 @@ describe('createProviderWithReview', () => {
   });
 
   it('cria o prestador com a primeira avaliacao e retorna o perfil hidratado', async () => {
+    const payload = {
+      ...basePayload,
+      supplierName: 'aNa fAxIna'
+    };
     const specialtyLookup = makeSpecialtyLookupBuilder({ data: { id: 'diarista', name: 'Diarista', category_id: 'cat-limpeza' }, error: null });
+    const duplicateLookup = makeSearchBuilder({ data: null, error: null });
     const providerInsert = makeInsertSingleBuilder({ data: { id: 'provider-1' }, error: null });
     const reviewInsert = makeInsertSingleBuilder({ data: { id: 'review-1' }, error: null });
-    const providerLookup = makeMaybeSingleBuilder({ data: makeProviderRow(), error: null });
+    const providerLookup = makeMaybeSingleBuilder({ data: makeProviderRow({ name: 'aNa fAxIna' }), error: null });
 
     supabase.from
+      .mockReturnValueOnce(duplicateLookup)
       .mockReturnValueOnce(specialtyLookup)
       .mockReturnValueOnce(providerInsert)
       .mockReturnValueOnce(reviewInsert)
       .mockReturnValueOnce(providerLookup);
 
-    const result = await createProviderWithReview(baseUser, basePayload);
+    const result = await createProviderWithReview(baseUser, payload);
 
     expect(providerInsert.insert).toHaveBeenCalledWith({
       condominium_id: 'condo-1',
@@ -157,6 +174,9 @@ describe('createProviderWithReview', () => {
       service_specialty_id: 'diarista',
       service_specialty_name: 'Diarista',
       custom_service_description: null,
+      business_description: null,
+      additional_service_specialty_ids: [],
+      additional_service_specialty_names: [],
       created_by: 'user-1'
     });
     expect(reviewInsert.insert).toHaveBeenCalledWith({
@@ -200,6 +220,7 @@ describe('createProviderWithReview', () => {
       ...basePayload,
       photos: ['file:///foto-1.jpg', 'file:///foto-2.jpg']
     };
+    const duplicateLookup = makeSearchBuilder({ data: null, error: null });
     const specialtyLookup = makeSpecialtyLookupBuilder({ data: { id: 'diarista', name: 'Diarista', category_id: 'cat-limpeza' }, error: null });
     const providerInsert = makeInsertSingleBuilder({ data: { id: 'provider-1' }, error: null });
     const reviewInsert = makeInsertSingleBuilder({ data: { id: 'review-1' }, error: null });
@@ -241,6 +262,7 @@ describe('createProviderWithReview', () => {
     );
 
     supabase.from
+      .mockReturnValueOnce(duplicateLookup)
       .mockReturnValueOnce(specialtyLookup)
       .mockReturnValueOnce(providerInsert)
       .mockReturnValueOnce(reviewInsert)
@@ -273,8 +295,10 @@ describe('createProviderWithReview', () => {
       serviceSpecialtyId: 'outros',
       customServiceDescription: 'Montador de moveis'
     };
+    const duplicateLookup = makeSearchBuilder({ data: null, error: null });
     const specialtyLookup = makeSpecialtyLookupBuilder({ data: { id: 'outros', name: 'Outros', category_id: 'cat-outros' }, error: null });
     const providerInsert = makeInsertSingleBuilder({ data: { id: 'provider-1' }, error: null });
+    const suggestionInsert = { insert: jest.fn().mockResolvedValue({ error: null }) };
     const reviewInsert = makeInsertSingleBuilder({ data: { id: 'review-1' }, error: null });
     const providerLookup = makeMaybeSingleBuilder({
       data: makeProviderRow({
@@ -290,8 +314,10 @@ describe('createProviderWithReview', () => {
     });
 
     supabase.from
+      .mockReturnValueOnce(duplicateLookup)
       .mockReturnValueOnce(specialtyLookup)
       .mockReturnValueOnce(providerInsert)
+      .mockReturnValueOnce(suggestionInsert)
       .mockReturnValueOnce(reviewInsert)
       .mockReturnValueOnce(providerLookup);
 
@@ -308,12 +334,39 @@ describe('createProviderWithReview', () => {
   });
 
   it('propaga o erro do Supabase quando o cadastro do prestador falha', async () => {
+    const duplicateLookup = makeSearchBuilder({ data: null, error: null });
     const specialtyLookup = makeSpecialtyLookupBuilder({ data: { id: 'diarista', name: 'Diarista', category_id: 'cat-limpeza' }, error: null });
     const providerInsert = makeInsertSingleBuilder({ data: null, error: { message: 'duplicate key value violates unique constraint' } });
 
-    supabase.from.mockReturnValueOnce(specialtyLookup).mockReturnValueOnce(providerInsert);
+    supabase.from.mockReturnValueOnce(duplicateLookup).mockReturnValueOnce(specialtyLookup).mockReturnValueOnce(providerInsert);
 
     await expect(createProviderWithReview(baseUser, basePayload)).rejects.toThrow('duplicate key value violates unique constraint');
     expect(trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia o cadastro quando o telefone ja existe em um prestador ativo', async () => {
+    const duplicateLookup = makeSearchBuilder({ data: makeProviderRow(), error: null });
+
+    supabase.from.mockReturnValueOnce(duplicateLookup);
+
+    await expect(createProviderWithReview(baseUser, basePayload)).rejects.toThrow(
+      'Este prestador ja existe na comunidade. Adicione sua experiencia ao perfil existente.'
+    );
+    expect(trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('traduz o erro do banco quando o indice unico barrar telefone duplicado', async () => {
+    const duplicateLookup = makeSearchBuilder({ data: null, error: null });
+    const specialtyLookup = makeSpecialtyLookupBuilder({ data: { id: 'diarista', name: 'Diarista', category_id: 'cat-limpeza' }, error: null });
+    const providerInsert = makeInsertSingleBuilder({
+      data: null,
+      error: { message: 'duplicate key value violates unique constraint "uq_providers_condominium_phone_active"' }
+    });
+
+    supabase.from.mockReturnValueOnce(duplicateLookup).mockReturnValueOnce(specialtyLookup).mockReturnValueOnce(providerInsert);
+
+    await expect(createProviderWithReview(baseUser, basePayload)).rejects.toThrow(
+      'Este prestador ja existe na comunidade. Adicione sua experiencia ao perfil existente.'
+    );
   });
 });

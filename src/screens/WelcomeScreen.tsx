@@ -8,15 +8,17 @@ import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
-import { login, resetPassword } from '../services/api';
+import { login } from '../services/api';
 import { getBackendMode, getBackendStatusMessage } from '../services/supabase/config';
+import { getFriendlyAuthErrorMessage } from '../utils/authErrors';
 
 export function WelcomeScreen({ navigation, route }: any) {
-  const { setUser } = useApp();
+  const { setUser, isPasswordRecoveryMode } = useApp();
   const [mode, setMode] = useState<'default' | 'login'>(route.params?.mode === 'login' ? 'login' : 'default');
-  const [email, setEmail] = useState('pedro@vizinho.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const loginProgress = useRef(new Animated.Value(mode === 'login' ? 1 : 0)).current;
   const backendMode = getBackendMode();
@@ -34,6 +36,11 @@ export function WelcomeScreen({ navigation, route }: any) {
     }).start();
   }, [loginProgress, mode]);
 
+  useEffect(() => {
+    if (!isPasswordRecoveryMode) return;
+    navigation.replace('ResetPassword', { mode: 'link' });
+  }, [isPasswordRecoveryMode, navigation]);
+
   function updateEmail(value: string) {
     setEmail(value);
     if (submitError) setSubmitError(null);
@@ -50,11 +57,11 @@ export function WelcomeScreen({ navigation, route }: any) {
     if (!email.trim() || !password) {
       const message = 'Informe email e senha.';
       setSubmitError(message);
-      Alert.alert('Dados obrigatorios', message);
+      Alert.alert('Dados obrigatórios', message);
       return;
     }
     if (!/\S+@\S+\.\S+/.test(email.trim())) {
-      const message = 'Informe um email valido para entrar.';
+      const message = 'Informe um email válido para entrar.';
       setSubmitError(message);
       Alert.alert('Revise o email', message);
       return;
@@ -71,24 +78,32 @@ export function WelcomeScreen({ navigation, route }: any) {
       const message = getFriendlyAuthErrorMessage(error);
       setSubmitError(message);
       console.error('[WelcomeScreen] login failed', error);
-      Alert.alert('Nao foi possivel entrar', message);
+      Alert.alert('Não foi possível entrar', message);
     } finally {
       setLoading(false);
     }
   }
 
-  async function submitPasswordReset() {
+  function submitPasswordReset() {
     if (!email.trim()) {
-      Alert.alert('Informe seu email', 'Digite o email da conta para recuperar a senha.');
+      navigation.navigate('ResetPassword', { mode: 'request' });
       return;
     }
 
-    try {
-      await resetPassword(email.trim());
-      Alert.alert('Email enviado', 'Se o email existir, voce recebera as instrucoes de recuperacao.');
-    } catch (error) {
-      Alert.alert('Nao foi possivel enviar', getFriendlyAuthErrorMessage(error));
+    if (!/\S+@\S+\.\S+/.test(email.trim())) {
+      Alert.alert('Revise o email', 'Informe um email válido para recuperar a senha.');
+      return;
     }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    setResetLoading(true);
+    navigation.navigate('ResetPassword', {
+      email: normalizedEmail,
+      mode: 'code',
+      notice: 'Estamos enviando o código de recuperação para este email.',
+      autoSend: true
+    });
+    setResetLoading(false);
   }
 
   return (
@@ -101,11 +116,11 @@ export function WelcomeScreen({ navigation, route }: any) {
           <ViciniHeroLockup />
 
           <View style={styles.message}>
-            <Text style={styles.headline}>Indicacoes confiaveis,{'\n'}feitas por quem mora perto.</Text>
+            <Text style={styles.headline}>Indicações confiáveis,{'\n'}feitas por quem mora perto.</Text>
           </View>
           {backendMode === 'mock' ? (
             <View style={styles.mockNotice}>
-              <Text style={styles.mockNoticeLabel}>Modo demonstracao</Text>
+              <Text style={styles.mockNoticeLabel}>Modo demonstração</Text>
               <Text style={styles.mockNoticeText}>{backendMessage}</Text>
             </View>
           ) : null}
@@ -136,19 +151,19 @@ export function WelcomeScreen({ navigation, route }: any) {
                 ]}
               >
                 <View style={styles.loginFields}>
-                  <AppInput label="Email" value={email} onChangeText={updateEmail} autoCapitalize="none" keyboardType="email-address" />
-                  <AppInput label="Senha" value={password} onChangeText={updatePassword} secureTextEntry />
+                  <AppInput label="Email" placeholder="email" value={email} onChangeText={updateEmail} autoCapitalize="none" keyboardType="email-address" />
+                  <AppInput label="Senha" placeholder="senha" value={password} onChangeText={updatePassword} secureTextEntry />
                 </View>
                 {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
                 <AppButton title="Entrar" onPress={submitLogin} loading={loading} style={styles.primaryButton} />
                 <View style={styles.inlineAccount}>
-                  <Text style={styles.inlineAccountText}>Nao tem conta?</Text>
+                  <Text style={styles.inlineAccountText}>Não tem conta?</Text>
                   <Pressable onPress={() => navigation.navigate('Onboarding')} hitSlop={10}>
                     <Text style={styles.inlineAccountLink}>Criar conta</Text>
                   </Pressable>
                 </View>
-                <Pressable accessibilityRole="button" onPress={submitPasswordReset} hitSlop={10} style={styles.forgotPassword}>
-                  <Text style={styles.inlineAccountLink}>Esqueci minha senha</Text>
+                <Pressable accessibilityRole="button" onPress={submitPasswordReset} hitSlop={10} style={styles.forgotPassword} disabled={resetLoading}>
+                  <Text style={styles.inlineAccountLink}>{resetLoading ? 'Enviando recuperação...' : 'Esqueci minha senha'}</Text>
                 </Pressable>
                 <Text style={styles.trustCue}>Acesso liberado apenas para moradores verificados.</Text>
               </Animated.View>
@@ -160,29 +175,6 @@ export function WelcomeScreen({ navigation, route }: any) {
   );
 }
 
-function getFriendlyAuthErrorMessage(error: unknown) {
-  const rawMessage = error instanceof Error ? error.message : 'Tente novamente.';
-  const normalized = rawMessage.toLowerCase();
-
-  if (normalized.includes('invalid login credentials')) {
-    return 'Email ou senha incorretos. Confira os dados usados no cadastro.';
-  }
-
-  if (normalized.includes('email not confirmed')) {
-    return 'Seu email ainda nao foi confirmado. Verifique sua caixa de entrada e o spam.';
-  }
-
-  if (normalized.includes('too many requests')) {
-    return 'Houve muitas tentativas seguidas. Aguarde um pouco e tente novamente.';
-  }
-
-  if (normalized.includes('signup is disabled')) {
-    return 'O acesso por email e senha nao esta habilitado no Supabase.';
-  }
-
-  return rawMessage;
-}
-
 function ViciniHeroLockup() {
   return (
     <View style={styles.logoLockup}>
@@ -192,7 +184,7 @@ function ViciniHeroLockup() {
       </Svg>
       <Text style={styles.wordmark}>Vicini</Text>
       <View style={styles.tagDivider} />
-      <Text style={styles.tagline}>INDICACOES REAIS.{'\n'}VIZINHOS DE VERDADE.</Text>
+      <Text style={styles.tagline}>INDICAÇÕES REAIS.{'\n'}VIZINHOS DE VERDADE.</Text>
     </View>
   );
 }

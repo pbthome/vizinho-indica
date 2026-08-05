@@ -11,6 +11,7 @@ import { normalizePhoneNumber } from '../utils/phone';
 import { isSupabaseConfigured } from './supabase/config';
 import {
   getCurrentProfile,
+  resetPasswordWithCode as resetPasswordWithCodeFromRepository,
   signInWithPassword,
   signOut as supabaseSignOut,
   sendPasswordReset,
@@ -32,6 +33,7 @@ import {
   listFeedbacks,
   listModerationContent,
   listReports,
+  moderateReviewComment,
   moderateReview,
   moderateReviewPhoto,
   resolveReport,
@@ -131,6 +133,14 @@ export async function logout() {
 export async function resetPassword(email: string) {
   if (isSupabaseConfigured()) {
     await sendPasswordReset(email);
+    return;
+  }
+  await wait();
+}
+
+export async function resetPasswordWithCode(email: string, code: string, password: string) {
+  if (isSupabaseConfigured()) {
+    await resetPasswordWithCodeFromRepository(email, code, password);
     return;
   }
   await wait();
@@ -267,7 +277,9 @@ export async function searchRecommendations(condominiumId: string, query: string
   return active(recommendations)
     .filter((item) => item.condominiumId === condominiumId)
     .map(toPublicRecommendation)
-    .filter((item) => (categoryId ? item.categoryId === categoryId || item.serviceSpecialtyId === categoryId : true))
+    .filter((item) => (categoryId
+      ? item.additionalServiceSpecialtyIds?.includes(categoryId) || item.categoryId === categoryId || item.serviceSpecialtyId === categoryId
+      : true))
     .filter((item) => (minRating ? item.averageRating >= minRating : true))
     .filter((item) => {
       if (!normalized) return true;
@@ -300,6 +312,11 @@ export async function addRecommendation(user: User, payload: NewRecommendationPa
   }
   const specialty = getServiceSpecialtyById(payload.serviceSpecialtyId);
   const category = getCategoryById(specialty?.categoryId ?? payload.categoryId);
+  const additionalSpecialties = [...new Set(payload.additionalServiceSpecialtyIds ?? [])]
+    .filter((id) => id !== payload.serviceSpecialtyId && id !== 'outros')
+    .slice(0, 4)
+    .map((id) => getServiceSpecialtyById(id))
+    .filter(Boolean);
   const recommendationId = `rec-${Date.now()}`;
   const [reviewerBlock, reviewerLot] = user.unit.split(',').map((part) => part.trim());
   const recommendation: Recommendation = {
@@ -310,7 +327,10 @@ export async function addRecommendation(user: User, payload: NewRecommendationPa
     categoryName: category?.name ?? 'Outros',
     serviceSpecialtyId: payload.serviceSpecialtyId,
     serviceSpecialtyName: specialty?.name ?? 'Outros',
+    additionalServiceSpecialtyIds: additionalSpecialties.map((item) => item!.id),
+    additionalServiceSpecialtyNames: additionalSpecialties.map((item) => item!.name),
     customServiceDescription: payload.customServiceDescription,
+    businessDescription: payload.businessDescription,
     whatsapp: payload.whatsapp,
     normalizedPhone: normalizePhoneNumber(payload.whatsapp),
     contactInfo: 'Contato informado por morador.',
@@ -582,6 +602,8 @@ export async function moderateContent(
     const reasonText = reason.trim() || 'Removido pela moderacao';
     if (target.type === 'photo') {
       await moderateReviewPhoto(admin, target.contentId?.replace('photo:', '') ?? '', reasonText);
+    } else if (target.type === 'comment' && target.reviewId) {
+      await moderateReviewComment(admin, target.reviewId, reasonText);
     } else if (target.reviewId) {
       await moderateReview(admin, target.reviewId, reasonText);
     }

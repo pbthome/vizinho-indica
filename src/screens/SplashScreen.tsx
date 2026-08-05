@@ -6,16 +6,40 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { commonStyles } from './styles';
 
 export function SplashScreen({ navigation }: any) {
-  const { refreshSession } = useApp();
+  const { authInitialized, initializeAuth, isPasswordRecoveryMode, refreshSession } = useApp();
 
   useEffect(() => {
-    refreshSession().then((user) => {
-      if (!user) navigation.replace('Welcome');
-      else if (user.status === 'pending') navigation.replace('WaitingApproval');
-      else if (user.status === 'rejected' || user.status === 'blocked') navigation.replace('AccessStatus');
-      else navigation.getParent()?.replace('Resident');
+    let cancelled = false;
+
+    void initializeAuth().then(() => {
+      if (cancelled) return;
     });
-  }, [navigation, refreshSession]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initializeAuth]);
+
+  useEffect(() => {
+    if (!authInitialized) return;
+
+    if (isPasswordRecoveryMode) {
+      navigation.replace('ResetPassword');
+      return;
+    }
+
+    void refreshSession()
+      .then((user) => {
+        if (!user) navigation.replace('Welcome');
+        else if (user.status === 'pending') navigation.replace('WaitingApproval');
+        else if (user.status === 'rejected' || user.status === 'blocked') navigation.replace('AccessStatus');
+        else navigation.getParent()?.replace('Resident');
+      })
+      .catch((error) => {
+        console.error('[SplashScreen] refreshSession failed', error);
+        navigation.replace('Welcome');
+      });
+  }, [authInitialized, isPasswordRecoveryMode, navigation, refreshSession]);
 
   return (
     <ScreenContainer scroll={false}>

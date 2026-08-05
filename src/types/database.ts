@@ -113,6 +113,38 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['provider_specialties']['Insert']>;
         Relationships: [];
       };
+      service_suggestions: {
+        Row: {
+          id: string;
+          condominium_id: string;
+          proposed_name: string;
+          suggested_category_id: string | null;
+          provider_id: string | null;
+          created_by: string | null;
+          status: 'pending' | 'approved' | 'linked' | 'rejected';
+          resolved_specialty_id: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          condominium_id: string;
+          proposed_name: string;
+          suggested_category_id?: string | null;
+          provider_id?: string | null;
+          created_by?: string | null;
+          status?: 'pending' | 'approved' | 'linked' | 'rejected';
+          resolved_specialty_id?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['service_suggestions']['Insert']>;
+        Relationships: [];
+      };
       providers: {
         Row: {
           id: string;
@@ -126,6 +158,9 @@ export type Database = {
           service_specialty_id: string | null;
           service_specialty_name: string | null;
           custom_service_description: string | null;
+          business_description: string | null;
+          additional_service_specialty_ids: string[];
+          additional_service_specialty_names: string[];
           average_rating: number;
           total_reviews: number;
           would_hire_again_rate: number;
@@ -148,6 +183,9 @@ export type Database = {
           service_specialty_id?: string | null;
           service_specialty_name?: string | null;
           custom_service_description?: string | null;
+          business_description?: string | null;
+          additional_service_specialty_ids?: string[];
+          additional_service_specialty_names?: string[];
           average_rating?: number;
           total_reviews?: number;
           would_hire_again_rate?: number;
@@ -371,7 +409,12 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      review_service_suggestion: {
+        Args: { target_suggestion_id: string; decision: string; target_specialty_id?: string | null };
+        Returns: string | null;
+      };
+    };
     Enums: Record<string, never>;
   };
 };

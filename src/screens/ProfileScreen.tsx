@@ -13,10 +13,10 @@ import { commonStyles } from './styles';
 
 const feedbackSubjects: FeedbackSubject[] = [
   'Problema no app',
-  'Sugestao de melhoria',
+  'Sugestão de melhoria',
   'Dados incorretos',
-  'Recomendacao/fornecedor',
-  'Duvida',
+  'Recomendação/fornecedor',
+  'Dúvida',
   'Outro'
 ];
 
@@ -67,7 +67,7 @@ export function ProfileScreen({ navigation }: any) {
       resetForm();
       setSuccessVisible(true);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Nao foi possivel enviar o feedback agora.');
+      setSubmitError(error instanceof Error ? error.message : 'Não foi possível enviar o feedback agora.');
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +109,7 @@ export function ProfileScreen({ navigation }: any) {
           <View style={styles.feedbackCardTextBlock}>
             <Text style={styles.feedbackCardTitle}>Ajude a melhorar o app</Text>
             <Text style={styles.feedbackCardText}>
-              Encontrou algum problema ou tem uma sugestao? Seu feedback ajuda a melhorar a experiencia do condominio.
+              Encontrou algum problema ou tem uma sugestão? Seu feedback ajuda a melhorar a experiência do condomínio.
             </Text>
           </View>
 

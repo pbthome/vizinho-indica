@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
@@ -22,7 +22,10 @@ type Props = {
   helperText?: string;
 };
 
-export function PhoneInput({ label, value, onChangeText, error, helperText }: Props) {
+export const PhoneInput = forwardRef<TextInput, Props>(function PhoneInput(
+  { label, value, onChangeText, error, helperText },
+  ref
+) {
   const initialCountry = useMemo(() => findPhoneCountryByDialCode(value) ?? defaultPhoneCountry, [value]);
   const [country, setCountry] = useState<PhoneCountry>(initialCountry);
   const [open, setOpen] = useState(false);
@@ -67,6 +70,7 @@ export function PhoneInput({ label, value, onChangeText, error, helperText }: Pr
           <ChevronDown color={colors.secondaryText} size={16} />
         </Pressable>
         <TextInput
+          ref={ref}
           value={formatNationalPhone(country, nationalDigits)}
           onChangeText={changePhone}
           keyboardType="phone-pad"
@@ -112,7 +116,7 @@ export function PhoneInput({ label, value, onChangeText, error, helperText }: Pr
       </Modal>
     </View>
   );
-}
+});
 
 function normalize(value: string) {
   return value

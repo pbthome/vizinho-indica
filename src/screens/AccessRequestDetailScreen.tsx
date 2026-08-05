@@ -21,25 +21,25 @@ export function AccessRequestDetailScreen({ route, navigation }: any) {
   async function approve() {
     if (!request) return;
     await approveAccessRequest(request.id);
-    Alert.alert('Acesso aprovado', 'O morador receberá a confirmação por email/WhatsApp.');
+    Alert.alert('Acesso aprovado', 'O morador recebera a confirmacao por email.');
     navigation.goBack();
   }
 
   function reject() {
     if (!request) return;
-    Alert.prompt?.('Rejeitar solicitação', 'Motivo opcional', async () => {
+    Alert.prompt?.('Rejeitar solicitacao', 'Motivo opcional', async () => {
       await rejectAccessRequest(request.id);
-      Alert.alert('Solicitação rejeitada', 'O morador receberá a resposta por email/WhatsApp.');
+      Alert.alert('Solicitacao rejeitada', 'O status do pedido foi atualizado.');
       navigation.goBack();
     }) ??
-      Alert.alert('Rejeitar solicitação', 'Confirma rejeição desta solicitação?', [
+      Alert.alert('Rejeitar solicitacao', 'Confirma rejeicao desta solicitacao?', [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Rejeitar',
           style: 'destructive',
           onPress: async () => {
             await rejectAccessRequest(request.id);
-            Alert.alert('Solicitação rejeitada', 'O morador receberá a resposta por email/WhatsApp.');
+            Alert.alert('Solicitacao rejeitada', 'O status do pedido foi atualizado.');
             navigation.goBack();
           }
         }
@@ -49,7 +49,7 @@ export function AccessRequestDetailScreen({ route, navigation }: any) {
   if (!request) {
     return (
       <ScreenContainer>
-        <Text style={commonStyles.title}>Solicitação não encontrada</Text>
+        <Text style={commonStyles.title}>Solicitacao nao encontrada</Text>
         <AppButton title="Voltar" onPress={() => navigation.goBack()} />
       </ScreenContainer>
     );

@@ -5,6 +5,7 @@ import { AccessRequestsScreen } from '../screens/AccessRequestsScreen';
 import { FeedbacksScreen } from '../screens/FeedbacksScreen';
 import { RecommendationDetailScreen } from '../screens/RecommendationDetailScreen';
 import { ReportedRecommendationsScreen } from '../screens/ReportedRecommendationsScreen';
+import { ServiceSuggestionsScreen } from '../screens/ServiceSuggestionsScreen';
 import { AuthStack } from './AuthStack';
 import { ResidentTabs } from './ResidentTabs';
 import { RootStackParamList } from './types';
@@ -26,6 +27,7 @@ export function AppNavigator() {
       <Stack.Screen name="AccessRequests" component={AccessRequestsScreen} />
       <Stack.Screen name="AccessRequestDetail" component={AccessRequestDetailScreen} />
       <Stack.Screen name="ReportedRecommendations" component={ReportedRecommendationsScreen} />
+      <Stack.Screen name="ServiceSuggestions" component={ServiceSuggestionsScreen} />
     </Stack.Navigator>
   );
 }
