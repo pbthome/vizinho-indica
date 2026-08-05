@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Keyboard, Text, TextInput, TextInputProps, View, StyleSheet } from 'react-native';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
@@ -8,11 +9,15 @@ type Props = TextInputProps & {
   error?: string;
 };
 
-export function AppInput({ label, error, style, onSubmitEditing, blurOnSubmit, ...props }: Props) {
+export const AppInput = forwardRef<TextInput, Props>(function AppInput(
+  { label, error, style, onSubmitEditing, blurOnSubmit, ...props },
+  ref
+) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        ref={ref}
         placeholderTextColor={colors.secondaryText}
         style={[styles.input, error && styles.inputError, style]}
         blurOnSubmit={blurOnSubmit ?? true}
@@ -25,7 +30,7 @@ export function AppInput({ label, error, style, onSubmitEditing, blurOnSubmit, .
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { gap: 5 },

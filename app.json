@@ -7,16 +7,31 @@
     "scheme": "vizinhoindica",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vizinhoindica.app"
+      "bundleIdentifier": "com.vicini.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "whatsapp"
+        ]
+      }
     },
     "android": {
-      "package": "com.vizinhoindica.app",
+      "package": "com.vicini.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1F6F5B"
       }
     },
-    "plugins": []
+    "plugins": [
+      "expo-dev-client"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a522708b-fb74-4298-800e-950961a956d0"
+      }
+    }
   }
 }

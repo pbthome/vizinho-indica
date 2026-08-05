@@ -43,6 +43,15 @@ export async function decideAccessRequest(admin: User, id: string, status: 'appr
 
   if (requestError) throw new Error(requestError.message);
 
+  if (status === 'approved') {
+    await sendApprovalEmail({
+      email: request.email,
+      fullName: request.full_name
+    }).catch((error) => {
+      console.error('[adminRepository] sendApprovalEmail failed', error);
+    });
+  }
+
   return mapAccessRequest(request);
 }
 
@@ -168,7 +177,7 @@ export async function listModerationContent(condominiumId: string): Promise<Back
         id: `review:${review.id}`,
         type: 'review',
         title: `Avaliacao ${review.rating}`,
-        body: review.comment_deleted_at ? 'Avaliacao sem comentario visivel.' : review.comment
+        body: review.comment_deleted_at ? 'Avaliação sem comentário visível.' : review.comment
       }
     ];
 
@@ -188,7 +197,7 @@ export async function listModerationContent(condominiumId: string): Promise<Back
         ...base,
         id: `photo:${photo.id}`,
         type: 'photo',
-        title: 'Foto da avaliacao',
+        title: 'Foto da avaliação',
         body: review.comment,
         photoUri: signedUrls.get(photo.storage_path) ?? photo.storage_path
       });
@@ -251,4 +260,12 @@ function mapAccessRequest(row: Tables<'access_requests'>): AccessRequest {
     requestDate: row.created_at.slice(0, 10),
     status: row.status === 'approved' ? 'approved' : row.status === 'rejected' ? 'rejected' : 'pending'
   };
+}
+
+async function sendApprovalEmail(payload: { email: string; fullName: string }) {
+  const { error } = await supabase.functions.invoke('send-approval-email', {
+    body: payload
+  });
+
+  if (error) throw new Error(error.message);
 }

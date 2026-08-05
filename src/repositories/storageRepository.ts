@@ -14,7 +14,7 @@ export async function uploadReviewPhoto(params: {
   const blob = await response.blob();
 
   if (blob.size > MAX_IMAGE_BYTES) {
-    throw new Error('A foto precisa ter no maximo 5 MB.');
+    throw new Error('A foto precisa ter no máximo 5 MB.');
   }
 
   const extension = getImageExtension(blob.type, params.uri);
@@ -39,7 +39,7 @@ async function blobToArrayBuffer(blob: Blob) {
     const reader = new FileReader();
 
     reader.onerror = () => {
-      reject(new Error('Nao foi possivel preparar a foto para envio.'));
+      reject(new Error('Não foi possível preparar a foto para envio.'));
     };
 
     reader.onload = () => {
@@ -48,7 +48,7 @@ async function blobToArrayBuffer(blob: Blob) {
         return;
       }
 
-      reject(new Error('Formato de foto nao suportado para envio.'));
+      reject(new Error('Formato de foto não suportado para envio.'));
     };
 
     reader.readAsArrayBuffer(blob);

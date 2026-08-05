@@ -1,5 +1,6 @@
 import { Feedback, Recommendation, Review, User } from '../types';
 import { Tables } from '../types/database';
+import { toAmericanNameCase } from '../utils/name';
 
 type ProviderWithRelations = Tables<'providers'> & {
   provider_categories?: Pick<Tables<'provider_categories'>, 'id' | 'name'> | null;
@@ -64,18 +65,21 @@ export function mapDbProvider(row: ProviderWithRelations): Recommendation {
   return {
     id: row.id,
     condominiumId: row.condominium_id,
-    supplierName: row.name,
+    supplierName: toAmericanNameCase(row.name),
     categoryId: row.provider_categories?.id ?? row.category_id ?? 'outros',
     categoryName: row.provider_categories?.name ?? 'Outros',
     serviceSpecialtyId: row.provider_specialties?.id ?? row.service_specialty_id ?? undefined,
     serviceSpecialtyName: row.provider_specialties?.name ?? row.service_specialty_name ?? undefined,
+    additionalServiceSpecialtyIds: row.additional_service_specialty_ids ?? [],
+    additionalServiceSpecialtyNames: row.additional_service_specialty_names ?? [],
     customServiceDescription: row.custom_service_description ?? undefined,
+    businessDescription: row.business_description ?? undefined,
     whatsapp: row.whatsapp ?? row.phone ?? '',
     normalizedPhone: row.phone ?? row.whatsapp ?? '',
     contactInfo: row.description ?? 'Contato informado por morador.',
     averageRating: Number(row.average_rating ?? 0),
     recommendedByCount: row.total_reviews,
-    shortComment: latestReview?.commentDeletedAt ? 'Comentario removido pela moderacao.' : latestReview?.comment ?? row.description ?? '',
+    shortComment: latestReview?.commentDeletedAt ? 'Comentário removido pela moderação.' : latestReview?.comment ?? row.description ?? '',
     servicePerformed: latestReview?.servicePerformed ?? row.description ?? undefined,
     usedWhen: latestReview?.usedWhen,
     realUseConfirmed: latestReview?.realUseConfirmed,

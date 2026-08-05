@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FloatingAddButton } from '../components/FloatingAddButton';
 import { ContextualFeedback, ContextualFeedbackState, FeedbackPlacement } from '../components/ContextualFeedback';
+import { SkeletonBlock, SkeletonCircle, SkeletonPill } from '../components/Skeleton';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
@@ -16,6 +17,7 @@ import {
   buildTimelineReviews,
   formatReviewDateLabel,
   formatTimelineAverageMessage,
+  getAdditionalServiceCount,
   getServiceName,
   TimelineReviewItem
 } from '../utils/recommendations';
@@ -24,13 +26,30 @@ export function HomeScreen({ navigation }: any) {
   const { user } = useApp();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Recommendation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [feedback, setFeedback] = useState<ContextualFeedbackState | null>(null);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      getRecommendations(user.condominiumId).then(setItems);
+      let active = true;
+      setLoading(true);
+      getRecommendations(user.condominiumId)
+        .then((data) => {
+          if (!active) return;
+          setItems(data);
+          setHasLoadedOnce(true);
+        })
+        .finally(() => {
+          if (!active) return;
+          setLoading(false);
+        });
+
+      return () => {
+        active = false;
+      };
     }, [user])
   );
 
@@ -48,17 +67,19 @@ export function HomeScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <View style={styles.heroGlow} />
-          <Text style={styles.greeting}>Ola, {firstName}</Text>
+          <Text style={styles.greeting}>Olá, {firstName}</Text>
           <Text style={styles.condominiumName}>{user?.condominiumName}</Text>
-          <Text style={styles.heroText}>Acompanhe as avaliacoes mais recentes compartilhadas pelos moradores.</Text>
+          <Text style={styles.heroText}>Acompanhe as avaliações mais recentes compartilhadas pelos moradores.</Text>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Ultimas avaliacoes</Text>
-          <Text style={styles.sectionSubtitle}>{timelineItems.length} avaliacao{timelineItems.length === 1 ? '' : 'oes'} registradas recentemente</Text>
+          <Text style={styles.sectionTitle}>Últimas avaliações</Text>
+          <Text style={styles.sectionSubtitle}>{timelineItems.length} avaliação{timelineItems.length === 1 ? '' : 'ões'} registradas recentemente</Text>
         </View>
 
-        {timelineItems.length ? (
+        {loading && !hasLoadedOnce ? (
+          <HomeTimelineSkeleton />
+        ) : timelineItems.length ? (
           timelineItems.map((entry) => {
             const provider = items.find((item) => item.id === entry.providerId);
             if (!provider) return null;
@@ -76,8 +97,8 @@ export function HomeScreen({ navigation }: any) {
           })
         ) : (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Ainda nao ha avaliacoes recentes</Text>
-            <Text style={styles.emptyText}>Quando os moradores cadastrarem novas indicacoes, elas aparecerao aqui em ordem da mais nova para a mais antiga.</Text>
+            <Text style={styles.emptyTitle}>Ainda não há avaliações recentes</Text>
+            <Text style={styles.emptyText}>Quando os moradores cadastrarem novas indicações, elas aparecerão aqui em ordem da mais nova para a mais antiga.</Text>
           </View>
         )}
       </ScrollView>
@@ -85,6 +106,40 @@ export function HomeScreen({ navigation }: any) {
       <FloatingAddButton insets={insets} onPress={() => navigation.navigate('AddRecommendation', { providerId: undefined })} />
       <ContextualFeedback feedback={feedback} bottomInset={Math.max(insets.bottom, 12) + 82} />
     </SafeAreaView>
+  );
+}
+
+function HomeTimelineSkeleton() {
+  return (
+    <>
+      {[0, 1, 2].map((entry) => (
+        <View key={entry} style={styles.card}>
+          <View style={styles.cardAccent} />
+          <View style={styles.cardHeader}>
+            <SkeletonCircle size={38} />
+            <View style={styles.skeletonTitleWrap}>
+              <SkeletonBlock width="58%" height={18} />
+              <SkeletonBlock width="36%" height={14} />
+            </View>
+            <SkeletonBlock width={54} height={14} />
+          </View>
+
+          <View style={styles.metaRow}>
+            <SkeletonPill width={62} />
+            <SkeletonBlock width={92} height={14} />
+            <SkeletonCircle size={23} />
+          </View>
+
+          <SkeletonBlock width="100%" height={16} />
+          <SkeletonBlock width="84%" height={16} />
+
+          <View style={styles.actions}>
+            <SkeletonBlock width="76%" height={39} radius={12} />
+            <SkeletonBlock width={39} height={39} radius={12} />
+          </View>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -113,7 +168,7 @@ function TimelineReviewCard({
   const hireAgainColor = item.wouldHireAgain ? colors.primary : colors.error;
   const hireAgainMessage = item.wouldHireAgain
     ? `${item.residentName} contrataria novamente`
-    : `${item.residentName} nao contrataria novamente`;
+    : `${item.residentName} não contrataria novamente`;
 
   return (
     <View style={styles.card}>
@@ -124,7 +179,7 @@ function TimelineReviewCard({
         </View>
         <View style={styles.cardTitleWrap}>
           <Text style={styles.cardTitle}>{item.providerName}</Text>
-          <Text style={styles.cardCategory}>{getServiceName(provider)}</Text>
+          <Text style={styles.cardCategory} numberOfLines={1}>{getServiceName(provider)}{getAdditionalServiceCount(provider) ? ` · +${getAdditionalServiceCount(provider)} serviços` : ''}</Text>
         </View>
         <Text style={styles.dateText}>{formatReviewDateLabel(item.reviewedAt)}</Text>
       </View>
@@ -140,7 +195,7 @@ function TimelineReviewCard({
           <Star color={colors.star} fill={colors.star} size={15} />
           <Text style={styles.ratingText}>{item.reviewRating.toFixed(1)}</Text>
         </Pressable>
-        <Text style={styles.metaDivider}>•</Text>
+        <Text style={styles.metaDivider}>-</Text>
         <Text style={styles.metaAuthor}>{item.residentMeta}</Text>
         {typeof item.wouldHireAgain === 'boolean' ? (
           <Pressable
@@ -155,11 +210,11 @@ function TimelineReviewCard({
         ) : null}
       </View>
 
-      <Text style={styles.comment}>“{item.comment}”</Text>
+      <Text style={styles.comment}>"{item.comment}"</Text>
 
       <View style={styles.actions}>
         <Pressable accessibilityRole="button" onPress={onOpenDetails} style={styles.detailButton}>
-          <Text style={styles.detailText}>Ver recomendacoes</Text>
+          <Text style={styles.detailText}>Ver recomendações</Text>
           <ArrowUpRight color={colors.darkGreen} size={17} />
         </Pressable>
         {item.whatsapp ? (
@@ -324,6 +379,10 @@ const styles = StyleSheet.create({
   cardTitleWrap: {
     flex: 1,
     gap: 2
+  },
+  skeletonTitleWrap: {
+    flex: 1,
+    gap: 8
   },
   cardTitle: {
     color: colors.text,

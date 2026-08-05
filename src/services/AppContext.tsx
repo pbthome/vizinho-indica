@@ -1,4 +1,5 @@
-import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Linking, Platform } from 'react-native';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { updatePassword } from '../repositories/authRepository';
 import { User } from '../types';
@@ -26,6 +27,21 @@ export function AppProvider({ children }: PropsWithChildren) {
   const [isPasswordRecoveryMode, setIsPasswordRecoveryMode] = useState(false);
   const [passwordRecoveryError, setPasswordRecoveryError] = useState<string | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const lastHandledRecoveryUrl = useRef<string | null>(null);
+
+  const handleRecoveryUrl = useCallback(async (url: string | null) => {
+    if (!url || !isSupabaseConfigured()) return false;
+    if (lastHandledRecoveryUrl.current === url) return true;
+
+    const recoveryState = await detectPasswordRecoveryFromUrl(url);
+    if (!recoveryState.active) return false;
+
+    lastHandledRecoveryUrl.current = url;
+    setPasswordRecoveryError(recoveryState.error);
+    setIsPasswordRecoveryMode(true);
+    setAuthInitialized(true);
+    return true;
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -65,17 +81,32 @@ export function AppProvider({ children }: PropsWithChildren) {
       syncAuthenticatedUser();
     });
 
-    return () => subscription.unsubscribe();
-  }, [isPasswordRecoveryMode]);
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      void handleRecoveryUrl(url).catch((error) => {
+        console.error('[AppContext] handleRecoveryUrl failed', error);
+      });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      linkingSubscription.remove();
+    };
+  }, [handleRecoveryUrl, isPasswordRecoveryMode]);
 
   const value = useMemo<AppContextValue>(
     () => ({
       user,
       setUser,
       refreshSession: async () => {
-        const session = await api.getCurrentUser();
-        setUser(session);
-        return session;
+        try {
+          const session = await api.getCurrentUser();
+          setUser(session);
+          return session;
+        } catch (error) {
+          console.error('[AppContext] refreshSession failed', error);
+          setUser(null);
+          return null;
+        }
       },
       signOut: async () => {
         await api.logout();
@@ -87,10 +118,17 @@ export function AppProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        const recoveryState = await detectPasswordRecovery();
-        setPasswordRecoveryError(recoveryState.error);
-        setIsPasswordRecoveryMode(recoveryState.active);
-        setAuthInitialized(true);
+        try {
+          const recoveryState = await detectPasswordRecovery();
+          setPasswordRecoveryError(recoveryState.error);
+          setIsPasswordRecoveryMode(recoveryState.active);
+        } catch (error) {
+          console.error('[AppContext] initializeAuth failed', error);
+          setPasswordRecoveryError(null);
+          setIsPasswordRecoveryMode(false);
+        } finally {
+          setAuthInitialized(true);
+        }
       },
       completePasswordRecovery: async (password: string) => {
         await updatePassword(password);
@@ -116,12 +154,28 @@ export function AppProvider({ children }: PropsWithChildren) {
 }
 
 async function detectPasswordRecovery() {
-  if (typeof window === 'undefined') {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined' || !window.location) {
+      return { active: false, error: null as string | null };
+    }
+
+    return detectPasswordRecoveryFromUrl(window.location.href);
+  }
+
+  const initialUrl = await Linking.getInitialURL();
+  return detectPasswordRecoveryFromUrl(initialUrl);
+}
+
+async function detectPasswordRecoveryFromUrl(url: string | null) {
+  if (!url) {
     return { active: false, error: null as string | null };
   }
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const [urlWithoutHash, hashPart = ''] = url.split('#');
+  const queryPart = urlWithoutHash.includes('?') ? urlWithoutHash.slice(urlWithoutHash.indexOf('?') + 1) : '';
+  const searchParams = new URLSearchParams(queryPart);
+  const hashParams = new URLSearchParams(hashPart.replace(/^#/, ''));
+  const normalizedUrl = url.toLowerCase();
   const screen = searchParams.get('screen');
   const code = searchParams.get('code');
   const searchType = searchParams.get('type');
@@ -133,7 +187,13 @@ async function detectPasswordRecovery() {
   const errorCode = hashParams.get('error_code');
   const errorDescription = hashParams.get('error_description');
   const hasRecoveryIntent =
-    screen === 'reset-password' || type === 'recovery' || Boolean(tokenHash) || Boolean(code) || Boolean(accessToken) || Boolean(errorCode);
+    normalizedUrl.includes('reset-password') ||
+    screen === 'reset-password' ||
+    type === 'recovery' ||
+    Boolean(tokenHash) ||
+    Boolean(code) ||
+    Boolean(accessToken) ||
+    Boolean(errorCode);
 
   if (!hasRecoveryIntent) {
     return { active: false, error: null as string | null };
@@ -182,7 +242,7 @@ async function detectPasswordRecovery() {
   if (!accessToken || !refreshToken) {
     return {
       active: true,
-      error: 'O link de recuperacao esta incompleto. Solicite um novo email para redefinir sua senha.'
+      error: 'O link de recuperação está incompleto. Solicite um novo email para redefinir sua senha.'
     };
   }
 
@@ -204,7 +264,7 @@ async function detectPasswordRecovery() {
 }
 
 function clearRecoveryUrl(keepResetScreen = false) {
-  if (typeof window === 'undefined') return;
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location || !window.history?.replaceState) return;
 
   const url = new URL(window.location.href);
   if (keepResetScreen) url.searchParams.set('screen', 'reset-password');
@@ -219,14 +279,14 @@ function getFriendlyRecoveryLinkError(errorCode: string | null, errorDescription
   const normalizedDescription = errorDescription?.toLowerCase() ?? '';
 
   if (normalizedCode.includes('otp_expired') || normalizedDescription.includes('expired')) {
-    return 'Esse link de recuperacao expirou ou ja foi usado. Solicite um novo email para redefinir sua senha.';
+    return 'Esse link de recuperação expirou ou já foi usado. Solicite um novo email para redefinir sua senha.';
   }
 
   if (normalizedCode.includes('access_denied') || normalizedDescription.includes('invalid')) {
-    return 'O link de recuperacao nao e mais valido. Solicite um novo email para redefinir sua senha.';
+    return 'O link de recuperação não é mais válido. Solicite um novo email para redefinir sua senha.';
   }
 
-  return errorDescription ?? 'Nao foi possivel validar o link de recuperacao.';
+  return errorDescription ?? 'Não foi possível validar o link de recuperação.';
 }
 
 export function useApp() {

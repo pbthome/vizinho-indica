@@ -1,11 +1,12 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { ArrowUpRight, MessageCircle, Search, Star } from 'lucide-react-native';
 import { RefObject, useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FloatingAddButton } from '../components/FloatingAddButton';
 import { ContextualFeedback, ContextualFeedbackState, FeedbackPlacement } from '../components/ContextualFeedback';
-import { serviceSpecialtiesForPicker } from '../constants/categories';
+import { SkeletonBlock, SkeletonCircle, SkeletonPill } from '../components/Skeleton';
+import { getServiceSpecialtyById, serviceSpecialtiesForPicker } from '../constants/categories';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
@@ -18,6 +19,7 @@ import {
   formatLastRecommendationLabel,
   formatTrustMessage,
   getHireAgainMetric,
+  getAdditionalServiceCount,
   getLatestActivityDate,
   getServiceName,
   normalize,
@@ -28,29 +30,40 @@ export function ProvidersScreen({ navigation }: any) {
   const { user } = useApp();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<Recommendation[]>([]);
-  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string | undefined>();
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [showAllServices, setShowAllServices] = useState(false);
   const [feedback, setFeedback] = useState<ContextualFeedbackState | null>(null);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      getRecommendations(user.condominiumId).then(setItems);
+      let active = true;
+      setLoading(true);
+      getRecommendations(user.condominiumId)
+        .then((data) => {
+          if (!active) return;
+          setItems(data);
+          setHasLoadedOnce(true);
+        })
+        .finally(() => {
+          if (!active) return;
+          setLoading(false);
+        });
+
+      return () => {
+        active = false;
+      };
     }, [user])
   );
 
-  const visibleSpecialties = serviceSpecialtiesForPicker.filter((specialty) => specialty.id !== 'outros');
-  const normalizedQuery = normalize(query);
+  const selectedSpecialty = getServiceSpecialtyById(selectedSpecialtyId);
   const filteredProviders = [...items]
     .filter((item) => (selectedSpecialtyId ? item.serviceSpecialtyId === selectedSpecialtyId : true))
-    .filter((item) => {
-      if (!normalizedQuery) return true;
-      const haystack = normalize(
-        [item.supplierName, getServiceName(item), item.shortComment, item.contactInfo, ...item.reviews.map((review) => review.comment)].join(' ')
-      );
-      return haystack.includes(normalizedQuery);
-    })
     .sort(sortProvidersForDirectory);
 
   function showFeedback(message: string, anchor: ContextualFeedbackState['anchor'], placement?: FeedbackPlacement) {
@@ -65,35 +78,36 @@ export function ProvidersScreen({ navigation }: any) {
         <View style={styles.hero}>
           <View style={styles.heroGlow} />
           <Text style={styles.heroTitle}>Prestadores</Text>
-          <Text style={styles.heroText}>Busque por profissao e compare os prestadores mais bem avaliados da comunidade.</Text>
+          <Text style={styles.heroText}>Busque por profissão e compare os prestadores mais bem avaliados da comunidade.</Text>
         </View>
 
         <View style={styles.searchPanel}>
-          <View style={styles.searchBar}>
-            <Search color={colors.darkGreen} size={19} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Buscar por nome ou profissao"
-              placeholderTextColor={colors.secondaryText}
-              style={styles.searchInput}
-            />
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable style={[styles.chip, !selectedSpecialtyId && styles.chipSelected]} onPress={() => setSelectedSpecialtyId(undefined)}>
-              <Text style={[styles.chipText, !selectedSpecialtyId && styles.chipTextSelected]}>Todas</Text>
+          <View style={styles.specialtyFilter}>
+            <Text style={styles.specialtyLabel}>Qual profissão você procura?</Text>
+            <Pressable
+              style={[styles.specialtySelector, selectedSpecialty && styles.specialtySelectorSelected]}
+              onPress={() => {
+                setServiceSearch(selectedSpecialty?.name ?? '');
+                setShowAllServices(false);
+                setServicePickerOpen(true);
+              }}
+            >
+              <Search color={selectedSpecialty ? colors.primary : colors.secondaryText} size={18} />
+              <Text style={[styles.specialtySelectorText, selectedSpecialty && styles.specialtySelectorTextSelected]}>
+                {selectedSpecialty?.name ?? 'Buscar profissão'}
+              </Text>
             </Pressable>
-            {visibleSpecialties.map((specialty) => (
-              <Pressable
-                key={specialty.id}
-                style={[styles.chip, selectedSpecialtyId === specialty.id && styles.chipSelected]}
-                onPress={() => setSelectedSpecialtyId((current) => (current === specialty.id ? undefined : specialty.id))}
-              >
-                <Text style={[styles.chipText, selectedSpecialtyId === specialty.id && styles.chipTextSelected]}>{specialty.name}</Text>
+            <View style={styles.chipRow}>
+              <Pressable style={[styles.chip, !selectedSpecialtyId && styles.chipSelected]} onPress={() => setSelectedSpecialtyId(undefined)}>
+                <Text style={[styles.chipText, !selectedSpecialtyId && styles.chipTextSelected]}>Todas</Text>
               </Pressable>
-            ))}
-          </ScrollView>
+              {selectedSpecialtyId ? (
+                <Pressable style={[styles.chip, styles.chipSelected]} onPress={() => setSelectedSpecialtyId(undefined)}>
+                  <Text style={[styles.chipText, styles.chipTextSelected]}>{selectedSpecialty?.name}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
         </View>
 
         <View style={styles.sectionHeader}>
@@ -101,7 +115,9 @@ export function ProvidersScreen({ navigation }: any) {
           <Text style={styles.sectionSubtitle}>{filteredProviders.length} resultado{filteredProviders.length === 1 ? '' : 's'}</Text>
         </View>
 
-        {filteredProviders.length ? (
+        {loading && !hasLoadedOnce ? (
+          <ProvidersListSkeleton />
+        ) : filteredProviders.length ? (
           filteredProviders.map((item) => (
             <ProviderCard
               key={item.id}
@@ -114,14 +130,65 @@ export function ProvidersScreen({ navigation }: any) {
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Nenhum prestador encontrado</Text>
-            <Text style={styles.emptyText}>Tente limpar a busca ou trocar o filtro de profissao para ver mais opcoes.</Text>
+            <Text style={styles.emptyText}>Tente limpar a busca ou trocar o filtro de profissão para ver mais opções.</Text>
           </View>
         )}
       </ScrollView>
 
+      <ServiceSpecialtyPicker
+        visible={servicePickerOpen}
+        query={serviceSearch}
+        selectedId={selectedSpecialtyId}
+        expanded={showAllServices}
+        onChangeQuery={setServiceSearch}
+        onClose={() => {
+          setServiceSearch('');
+          setServicePickerOpen(false);
+          setShowAllServices(false);
+        }}
+        onToggleExpanded={() => setShowAllServices((value) => !value)}
+        onSelect={(id) => {
+          setSelectedSpecialtyId(id === 'outros' ? undefined : id);
+          setServiceSearch(getServiceSpecialtyById(id)?.name ?? '');
+          setServicePickerOpen(false);
+          setShowAllServices(false);
+        }}
+      />
       <FloatingAddButton insets={insets} onPress={() => navigation.navigate('AddRecommendation', { providerId: undefined })} />
       <ContextualFeedback feedback={feedback} bottomInset={Math.max(insets.bottom, 12) + 82} />
     </SafeAreaView>
+  );
+}
+
+function ProvidersListSkeleton() {
+  return (
+    <>
+      {[0, 1, 2].map((entry) => (
+        <View key={entry} style={styles.card}>
+          <View style={styles.cardAccent} />
+          <View style={styles.cardHeader}>
+            <SkeletonCircle size={48} />
+            <View style={styles.skeletonCardTitleWrap}>
+              <SkeletonBlock width="64%" height={18} />
+              <SkeletonPill width={112} height={24} />
+            </View>
+          </View>
+
+          <View style={styles.infoPanel}>
+            <View style={styles.metricLine}>
+              <SkeletonPill width={118} />
+            </View>
+            <SkeletonBlock width="62%" height={14} />
+            <SkeletonBlock width="48%" height={14} />
+          </View>
+
+          <View style={styles.actions}>
+            <SkeletonBlock width="76%" height={38} radius={12} />
+            <SkeletonBlock width={48} height={38} radius={12} />
+          </View>
+        </View>
+      ))}
+    </>
   );
 }
 
@@ -143,7 +210,8 @@ function ProviderCard({
   const hasReviews = totalReviews > 0;
   const showTrustLine = totalReviews > 1 ? hireAgain.total > 0 : totalReviews === 1 ? hireAgain.yes === 1 : false;
   const lastRecommendationDate = hasReviews ? formatLastRecommendationLabel(getLatestActivityDate(item)) : '';
-  const reviewsLabel = totalReviews === 1 ? '1 avaliacao' : `${totalReviews} avaliacoes`;
+  const reviewsLabel = totalReviews === 1 ? '1 avaliação' : `${totalReviews} avaliações`;
+  const additionalServiceCount = getAdditionalServiceCount(item);
   const trustSummary =
     totalReviews === 1
       ? '1 morador contrataria novamente'
@@ -166,7 +234,8 @@ function ProviderCard({
         <View style={styles.cardTitleWrap}>
           <Text style={styles.cardTitle}>{item.supplierName}</Text>
           <View style={styles.professionBadge}>
-            <Text style={styles.professionBadgeText}>{getServiceName(item)}</Text>
+            <Text style={styles.professionBadgeText} numberOfLines={1}>{getServiceName(item)}</Text>
+            {additionalServiceCount ? <Text style={styles.professionBadgeCount}>+{additionalServiceCount}</Text> : null}
           </View>
         </View>
       </View>
@@ -183,7 +252,7 @@ function ProviderCard({
             >
               <Star color={colors.star} fill={colors.star} size={15} />
               <Text style={styles.ratingValue}>{item.averageRating.toFixed(1)}</Text>
-              <Text style={styles.metricSeparator}>·</Text>
+              <Text style={styles.metricSeparator}>-</Text>
               <Text style={styles.metricText}>{reviewsLabel}</Text>
             </Pressable>
 
@@ -202,16 +271,12 @@ function ProviderCard({
             <Text style={styles.lastRecommendationText}>{lastRecommendationDate}</Text>
           </>
         ) : (
-          <Text style={styles.emptyMetricText}>Ainda sem avaliacoes</Text>
+          <Text style={styles.emptyMetricText}>Ainda sem avaliações</Text>
         )}
       </View>
 
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onOpenDetails}
-          style={styles.detailButton}
-        >
+        <Pressable accessibilityRole="button" onPress={onOpenDetails} style={styles.detailButton}>
           <Text style={styles.detailText}>Ver perfil</Text>
           <ArrowUpRight color={colors.darkGreen} size={17} />
         </Pressable>
@@ -231,6 +296,99 @@ function showAnchoredFeedback(
   ref.current?.measureInWindow((x, y, width, height) => {
     onShowFeedback(message, { x, y, width, height });
   });
+}
+
+function ServiceSpecialtyPicker({
+  visible,
+  query,
+  selectedId,
+  expanded,
+  onChangeQuery,
+  onClose,
+  onToggleExpanded,
+  onSelect
+}: {
+  visible: boolean;
+  query: string;
+  selectedId?: string;
+  expanded: boolean;
+  onChangeQuery: (value: string) => void;
+  onClose: () => void;
+  onToggleExpanded: () => void;
+  onSelect: (id: string) => void;
+}) {
+  const normalized = normalize(query);
+  const allServices = getServiceSuggestions(query);
+  const visibleServices = normalized ? allServices : expanded ? allServices : allServices.filter((item) => item.id !== 'outros').slice(0, 8);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={styles.modalBackdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      >
+        <Pressable style={styles.modalScrim} onPress={onClose} />
+        <SafeAreaView style={[styles.sheet, normalized || expanded ? styles.sheetExpanded : null]}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>Escolha a profissão</Text>
+            <Pressable onPress={onClose}>
+              <Text style={styles.sheetClose}>Fechar</Text>
+            </Pressable>
+          </View>
+          <View style={[styles.sheetSearch, normalized ? styles.sheetSearchActive : null]}>
+            <Search color={colors.secondaryText} size={18} />
+            <TextInput
+              value={query}
+              onChangeText={onChangeQuery}
+              placeholder="Busque por eletricista, faxina, pet..."
+              placeholderTextColor={colors.secondaryText}
+              style={styles.serviceSearchInput}
+              autoFocus
+              blurOnSubmit
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+            <View style={styles.fullListHeader}>
+              <Text style={styles.sheetSectionTitle}>{normalized ? 'Resultados' : 'Todas as profissões'}</Text>
+              {!normalized ? (
+                <Pressable onPress={onToggleExpanded}>
+                  <Text style={styles.expandText}>{expanded ? 'Ver menos' : 'Ver todas'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.suggestionList}>
+              {visibleServices.map((specialty) => {
+                const selected = selectedId === specialty.id;
+                return (
+                  <Pressable
+                    key={specialty.id}
+                    style={({ pressed }) => [styles.suggestionItem, selected && styles.suggestionItemSelected, pressed && styles.suggestionPressed]}
+                    onPress={() => onSelect(specialty.id)}
+                  >
+                    <Text style={[styles.suggestionName, selected && styles.suggestionNameSelected]}>{specialty.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function getServiceSuggestions(query: string) {
+  const normalized = normalize(query);
+  return serviceSpecialtiesForPicker
+    .filter((specialty) => specialty.id !== 'outros')
+    .filter((specialty) => {
+      if (!normalized) return true;
+      return [specialty.name, ...specialty.aliases].some((value) => normalize(value).includes(normalized));
+    })
+    .slice(0, normalized ? 12 : 80);
 }
 
 const styles = StyleSheet.create({
@@ -295,27 +453,46 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 2
   },
-  searchBar: {
-    minHeight: 50,
-    borderRadius: 15,
-    backgroundColor: '#F8FAF8',
+  specialtyFilter: {
+    gap: 8
+  },
+  specialtyLabel: {
+    color: colors.text,
+    fontSize: typography.small,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: typography.fontFamily
+  },
+  specialtySelector: {
+    minHeight: 42,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#DDE9E4',
+    backgroundColor: '#FBFCFB',
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: '#DDEAE4'
+    gap: spacing.sm
   },
-  searchInput: {
+  specialtySelectorSelected: {
+    backgroundColor: colors.lightGreen,
+    borderColor: colors.primary
+  },
+  specialtySelectorText: {
     flex: 1,
-    color: colors.text,
+    color: colors.secondaryText,
     fontSize: typography.small,
     lineHeight: 20,
     fontFamily: typography.fontFamily
   },
+  specialtySelectorTextSelected: {
+    color: colors.primary,
+    fontWeight: '800'
+  },
   chipRow: {
     gap: 8,
-    paddingRight: spacing.md
+    flexDirection: 'row',
+    flexWrap: 'wrap'
   },
   chip: {
     minHeight: 38,
@@ -432,6 +609,11 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingTop: 1
   },
+  skeletonCardTitleWrap: {
+    flex: 1,
+    gap: 10,
+    paddingTop: 1
+  },
   cardTitle: {
     color: colors.text,
     fontSize: 18,
@@ -440,6 +622,8 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily
   },
   professionBadge: {
+    flexDirection: 'row',
+    gap: 6,
     alignSelf: 'flex-start',
     minHeight: 24,
     borderRadius: 999,
@@ -457,6 +641,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: typography.fontFamily
   },
+  professionBadgeCount: { color: colors.secondaryText, fontSize: typography.tiny, fontWeight: '900', fontFamily: typography.fontFamily },
   infoPanel: {
     borderRadius: 16,
     backgroundColor: '#F7FAF8',
@@ -556,5 +741,137 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E9F6E',
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
+  modalScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 31, 27, 0.28)'
+  },
+  sheet: {
+    maxHeight: '68%',
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    shadowColor: '#0E2E25',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 10
+  },
+  sheetExpanded: {
+    maxHeight: '82%'
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#D8E3DE',
+    marginBottom: spacing.md
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md
+  },
+  sheetTitle: {
+    color: colors.text,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: '900',
+    fontFamily: typography.fontFamily
+  },
+  sheetClose: {
+    color: colors.primary,
+    fontSize: typography.small,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  sheetSearch: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DDE9E4',
+    backgroundColor: '#FBFCFB',
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md
+  },
+  sheetSearchActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surface
+  },
+  serviceSearchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: typography.small,
+    lineHeight: 20,
+    fontFamily: typography.fontFamily
+  },
+  sheetContent: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xl
+  },
+  fullListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs
+  },
+  sheetSectionTitle: {
+    color: colors.secondaryText,
+    fontSize: typography.tiny,
+    lineHeight: 15,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  expandText: {
+    color: colors.primary,
+    fontSize: typography.tiny,
+    lineHeight: 15,
+    fontWeight: '800',
+    fontFamily: typography.fontFamily
+  },
+  suggestionList: {
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    backgroundColor: '#FCFDFC',
+    overflow: 'hidden'
+  },
+  suggestionItem: {
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F4F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm
+  },
+  suggestionItemSelected: {
+    backgroundColor: colors.lightGreen
+  },
+  suggestionPressed: {
+    backgroundColor: '#F3F8F5'
+  },
+  suggestionName: {
+    color: colors.text,
+    fontSize: typography.small,
+    fontWeight: '500',
+    fontFamily: typography.fontFamily
+  },
+  suggestionNameSelected: {
+    color: colors.primary,
+    fontWeight: '800'
   }
 });

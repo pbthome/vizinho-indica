@@ -28,10 +28,10 @@ export function AccessRequestsScreen({ navigation }: any) {
   async function decide(id: string, action: 'approve' | 'reject') {
     if (action === 'approve') {
       await approveAccessRequest(id);
-      Alert.alert('Morador aprovado', 'O residente receberá email/WhatsApp.');
+      Alert.alert('Morador aprovado', 'O residente recebera um email com a confirmacao de acesso.');
     } else {
       await rejectAccessRequest(id);
-      Alert.alert('Solicitação rejeitada', 'O residente receberá email/WhatsApp.');
+      Alert.alert('Solicitacao rejeitada', 'O status do pedido foi atualizado.');
     }
     load();
   }
@@ -40,8 +40,8 @@ export function AccessRequestsScreen({ navigation }: any) {
     <ScreenContainer>
       <View style={{ gap: spacing.lg }}>
         <AppButton title="Voltar" variant="ghost" onPress={() => navigation.goBack()} />
-        <Text style={commonStyles.title}>Usuários pendentes</Text>
-        {requests.length === 0 ? <EmptyState title="Nenhum morador aguardando aprovação agora." /> : null}
+        <Text style={commonStyles.title}>Usuarios pendentes</Text>
+        {requests.length === 0 ? <EmptyState title="Nenhum morador aguardando aprovacao agora." /> : null}
         {requests.map((request) => (
           <View key={request.id} style={commonStyles.card}>
             <Text style={commonStyles.sectionTitle}>{request.name}</Text>

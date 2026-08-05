@@ -1,10 +1,13 @@
 import { getCategoryById, getServiceSpecialtyById } from '../constants/categories';
 import { supabase } from '../services/supabase/client';
 import { NewRecommendationPayload, Recommendation, User } from '../types';
+import { toAmericanNameCase } from '../utils/name';
 import { normalizePhoneNumber } from '../utils/phone';
 import { trackEvent } from './analyticsRepository';
 import { mapDbProvider } from './mappers';
 import { createReviewPhotoUrls, uploadReviewPhoto } from './storageRepository';
+
+const DUPLICATE_PROVIDER_MESSAGE = 'Este prestador ja existe na comunidade. Adicione sua experiencia ao perfil existente.';
 
 export async function listProviders(condominiumId: string, limit = 50, offset = 0) {
   const { data, error } = await providerQuery()
@@ -59,7 +62,7 @@ export async function searchProviders(condominiumId: string, query: string, cate
 
   if (normalized) request = request.or(`name.ilike.%${normalized}%,description.ilike.%${normalized}%,whatsapp.ilike.%${normalized}%`);
   if (specialty) {
-    request = request.eq('service_specialty_id', specialty.id);
+    request = request.or(`service_specialty_id.eq.${specialty.id},additional_service_specialty_ids.cs.{${specialty.id}}`);
   } else if (category) {
     request = request.eq('category_id', category.id);
   }
@@ -83,29 +86,59 @@ export async function searchProviders(condominiumId: string, query: string, cate
 }
 
 export async function createProviderWithReview(user: User, payload: NewRecommendationPayload) {
+  const normalizedPhone = normalizePhoneNumber(payload.whatsapp);
+  const formattedSupplierName = toAmericanNameCase(payload.supplierName);
+  const existingProvider = await findProviderByPhone(user.condominiumId, payload.whatsapp);
+  if (existingProvider) throw new Error(DUPLICATE_PROVIDER_MESSAGE);
+
   const specialty = await resolveSpecialty(payload.serviceSpecialtyId);
+  const additionalSpecialties = await resolveAdditionalSpecialties(
+    payload.additionalServiceSpecialtyIds ?? [],
+    specialty.id
+  );
   const { data: provider, error } = await supabase
     .from('providers')
     .insert({
       condominium_id: user.condominiumId,
       category_id: specialty.category_id,
-      name: payload.supplierName,
-      phone: normalizePhoneNumber(payload.whatsapp),
+      name: formattedSupplierName,
+      phone: normalizedPhone,
       whatsapp: payload.whatsapp,
-      description: payload.servicePerformed,
+      description: payload.servicePerformed ?? null,
       service_specialty_id: specialty.id,
       service_specialty_name: specialty.name,
       custom_service_description: payload.customServiceDescription ?? null,
+      business_description: payload.businessDescription ?? null,
+      additional_service_specialty_ids: additionalSpecialties.map((item) => item.id),
+      additional_service_specialty_names: additionalSpecialties.map((item) => item.name),
       created_by: user.id
     })
     .select('id')
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isDuplicateProviderPhoneError(error.message)) throw new Error(DUPLICATE_PROVIDER_MESSAGE);
+    throw new Error(error.message);
+  }
+  if (payload.serviceSpecialtyId === 'outros' && payload.customServiceDescription) {
+    const category = getCategoryById(payload.suggestedCategoryId);
+    const { data: suggestedCategory } = category
+      ? await supabase.from('provider_categories').select('id').eq('name', getDatabaseCategoryName(category.name)).maybeSingle()
+      : { data: null };
+    const { error: suggestionError } = await supabase.from('service_suggestions').insert({
+      condominium_id: user.condominiumId,
+      proposed_name: payload.customServiceDescription,
+      suggested_category_id: suggestedCategory?.id ?? null,
+      provider_id: provider.id,
+      created_by: user.id,
+      status: 'pending'
+    });
+    if (suggestionError) throw new Error(`Prestador salvo, mas a sugestão de serviço não foi enviada: ${suggestionError.message}`);
+  }
   await createReview(user, provider.id, payload);
 
   const created = await getProviderById(provider.id);
-  if (!created) throw new Error('Fornecedor criado, mas nao encontrado apos salvar.');
+  if (!created) throw new Error('Fornecedor criado, mas não encontrado após salvar.');
   return created;
 }
 
@@ -129,7 +162,7 @@ async function createReview(user: User, providerId: string, payload: NewRecommen
       user_id: user.id,
       rating: payload.rating,
       comment: payload.comment,
-      service_performed: payload.servicePerformed,
+      service_performed: payload.servicePerformed ?? null,
       used_when: payload.usedWhen,
       would_hire_again: payload.wouldHireAgain,
       real_use_confirmed: payload.confirmedUse
@@ -189,6 +222,28 @@ async function resolveSpecialty(serviceSpecialtyId: string) {
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+async function resolveAdditionalSpecialties(ids: string[], primaryId: string) {
+  const uniqueIds = [...new Set(ids)].filter((id) => id !== primaryId && id !== 'outros').slice(0, 4);
+  if (!uniqueIds.length) return [];
+  const { data, error } = await supabase
+    .from('provider_specialties')
+    .select('id, name, category_id')
+    .in('id', uniqueIds)
+    .eq('active', true);
+  if (error) throw new Error(error.message);
+  if ((data ?? []).length !== uniqueIds.length) throw new Error('Um dos serviços adicionais não está mais disponível.');
+  return uniqueIds.map((id) => (data ?? []).find((item) => item.id === id)!);
+}
+
+function getDatabaseCategoryName(name: string) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function isDuplicateProviderPhoneError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes('uq_providers_condominium_phone_active') || normalized.includes('providers_condominium_id_phone');
 }
 
 function providerQuery() {

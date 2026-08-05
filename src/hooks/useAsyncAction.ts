@@ -10,7 +10,7 @@ export function useAsyncAction<TArgs extends unknown[], TResult>(action: (...arg
     try {
       return await action(...args);
     } catch (unknownError) {
-      const message = unknownError instanceof Error ? unknownError.message : 'Nao foi possivel concluir a acao.';
+      const message = unknownError instanceof Error ? unknownError.message : 'Não foi possível concluir a ação.';
       setError(message);
       throw unknownError;
     } finally {

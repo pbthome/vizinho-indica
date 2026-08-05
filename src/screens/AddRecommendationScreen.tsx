@@ -2,27 +2,30 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Camera, Search, Star, X } from 'lucide-react-native';
+import type { ReactNode, RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Keyboard, KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppButton } from '../components/AppButton';
 import { AppInput } from '../components/AppInput';
 import { PhoneInput } from '../components/PhoneInput';
-import { getServiceSpecialtyById, serviceSpecialtiesForPicker } from '../constants/categories';
+import { categories, getServiceSpecialtyById, serviceSpecialtiesForPicker } from '../constants/categories';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
 import { addRecommendation, addReviewToExistingRecommendation, findRecommendationByPhoneAsync, getRecommendationByIdAsync } from '../services/api';
 import { NewRecommendationPayload, Recommendation } from '../types';
+import { toAmericanNameCase } from '../utils/name';
 import { getPhoneValidation } from '../utils/phone';
 
 type UsedWhen = NewRecommendationPayload['usedWhen'];
 type UploadedPhoto = { id: string; uri: string };
-type Errors = Partial<Record<'supplierName' | 'whatsapp' | 'serviceSpecialtyId' | 'customServiceDescription' | 'servicePerformed' | 'usedWhen' | 'rating' | 'wouldHireAgain' | 'comment', string>>;
+type Errors = Partial<Record<'supplierName' | 'whatsapp' | 'serviceSpecialtyId' | 'customServiceDescription' | 'businessDescription' | 'usedWhen' | 'rating' | 'wouldHireAgain' | 'comment', string>>;
 type SuccessTarget =
   | { type: 'provider'; recommendationId: string; reviewId?: string }
   | { type: 'home'; recommendationId: string };
+type FieldKey = keyof Errors;
 
 const usedWhenOptions: { label: string; value: UsedWhen }[] = [
   { label: 'Esta semana', value: 'this_week' },
@@ -40,14 +43,23 @@ export function AddRecommendationScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const scrollRef = useRef<ScrollView>(null);
+  const supplierNameRef = useRef<TextInput>(null);
+  const whatsappRef = useRef<TextInput>(null);
+  const customServiceDescriptionRef = useRef<TextInput>(null);
+  const commentRef = useRef<TextInput>(null);
+  const submitInFlightRef = useRef(false);
+  const fieldPositionsRef = useRef<Partial<Record<FieldKey, number>>>({});
   const [supplierName, setSupplierName] = useState('');
   const [serviceSpecialtyId, setServiceSpecialtyId] = useState('');
+  const [additionalServiceSpecialtyIds, setAdditionalServiceSpecialtyIds] = useState<string[]>([]);
+  const [servicePickerPurpose, setServicePickerPurpose] = useState<'primary' | 'additional'>('primary');
   const [serviceSearch, setServiceSearch] = useState('');
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [showAllServices, setShowAllServices] = useState(false);
   const [customServiceDescription, setCustomServiceDescription] = useState('');
+  const [suggestedCategoryId, setSuggestedCategoryId] = useState('');
+  const [businessDescription, setBusinessDescription] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [servicePerformed, setServicePerformed] = useState('');
   const [usedWhen, setUsedWhen] = useState<UsedWhen | null>(null);
   const [rating, setRating] = useState(0);
   const [wouldHireAgain, setWouldHireAgain] = useState<boolean | null>(null);
@@ -66,6 +78,16 @@ export function AddRecommendationScreen() {
   const isAddingToExistingProvider = Boolean(contextualProvider);
 
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      });
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  useEffect(() => {
     const providerId = route.params?.providerId;
     if (!providerId) {
       setProviderFromRoute(undefined);
@@ -80,9 +102,10 @@ export function AddRecommendationScreen() {
       setSupplierName(provider.supplierName);
       setWhatsapp(provider.whatsapp);
       setServiceSpecialtyId(provider.serviceSpecialtyId ?? '');
+      setAdditionalServiceSpecialtyIds(provider.additionalServiceSpecialtyIds ?? []);
       setServiceSearch('');
       setCustomServiceDescription(provider.customServiceDescription ?? '');
-      setServicePerformed('');
+      setBusinessDescription(provider.businessDescription ?? '');
       setUsedWhen(null);
       setRating(0);
       setWouldHireAgain(null);
@@ -110,10 +133,12 @@ export function AddRecommendationScreen() {
   function resetForm() {
     setSupplierName('');
     setServiceSpecialtyId('');
+    setAdditionalServiceSpecialtyIds([]);
     setServiceSearch('');
     setCustomServiceDescription('');
+    setSuggestedCategoryId('');
+    setBusinessDescription('');
     setWhatsapp('');
-    setServicePerformed('');
     setUsedWhen(null);
     setRating(0);
     setWouldHireAgain(null);
@@ -128,27 +153,32 @@ export function AddRecommendationScreen() {
     if (!isAddingToExistingProvider && !supplierName.trim()) nextErrors.supplierName = 'Informe o nome do fornecedor.';
     if (!phoneValidation.isValid) nextErrors.whatsapp = phoneValidation.message || 'Informe um WhatsApp válido.';
     if (!isAddingToExistingProvider && !serviceSpecialtyId) nextErrors.serviceSpecialtyId = 'Escolha qual serviço esse profissional realiza.';
-    if (!isAddingToExistingProvider && serviceSpecialtyId === 'outros' && !customServiceDescription.trim()) nextErrors.customServiceDescription = 'Descreva o serviço.';
-    if (!servicePerformed.trim()) nextErrors.servicePerformed = 'Informe qual serviço foi realizado.';
+    if (!isAddingToExistingProvider && serviceSpecialtyId === 'outros' && !customServiceDescription.trim()) nextErrors.customServiceDescription = 'Digite um nome curto para o serviço.';
+    if (!isAddingToExistingProvider && serviceSpecialtyId === 'outros' && customServiceDescription.trim().length > 40) nextErrors.customServiceDescription = 'Use no máximo 40 caracteres.';
     if (!usedWhen) nextErrors.usedWhen = 'Escolha quando você utilizou.';
     if (!rating) nextErrors.rating = 'Escolha uma nota.';
     if (wouldHireAgain === null) nextErrors.wouldHireAgain = 'Informe se contrataria novamente.';
     if (!comment.trim()) nextErrors.comment = 'Conte como foi sua experiência.';
     setErrors(nextErrors);
+    focusFirstError(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
 
   async function submit() {
+    if (loading || submitInFlightRef.current) return;
     if (!user || !validate() || !usedWhen || wouldHireAgain === null) return;
     const wasAddingToExistingProvider = Boolean(contextualProvider);
     const specialty = contextualProvider ? getServiceSpecialtyById(contextualProvider.serviceSpecialtyId) : getServiceSpecialtyById(serviceSpecialtyId);
+    const formattedSupplierName = contextualProvider?.supplierName ?? toAmericanNameCase(supplierName);
     const payload: NewRecommendationPayload = {
-      supplierName: contextualProvider?.supplierName ?? supplierName.trim(),
+      supplierName: formattedSupplierName,
       categoryId: contextualProvider?.categoryId ?? specialty?.categoryId ?? 'outros',
       serviceSpecialtyId: contextualProvider?.serviceSpecialtyId ?? serviceSpecialtyId,
+      additionalServiceSpecialtyIds: contextualProvider?.additionalServiceSpecialtyIds ?? additionalServiceSpecialtyIds,
       customServiceDescription: contextualProvider?.customServiceDescription ?? (serviceSpecialtyId === 'outros' ? customServiceDescription.trim() : undefined),
+      suggestedCategoryId: serviceSpecialtyId === 'outros' ? suggestedCategoryId || undefined : undefined,
+      businessDescription: contextualProvider?.businessDescription ?? (businessDescription.trim() || undefined),
       whatsapp: contextualProvider?.whatsapp ?? whatsapp.trim(),
-      servicePerformed: servicePerformed.trim(),
       usedWhen,
       wouldHireAgain,
       rating,
@@ -157,6 +187,7 @@ export function AddRecommendationScreen() {
       confirmedUse: true
     };
 
+    submitInFlightRef.current = true;
     setLoading(true);
     try {
       if (contextualProvider) {
@@ -169,10 +200,12 @@ export function AddRecommendationScreen() {
 
       setSupplierName('');
       setServiceSpecialtyId('');
+      setAdditionalServiceSpecialtyIds([]);
       setServiceSearch('');
       setCustomServiceDescription('');
+      setSuggestedCategoryId('');
+      setBusinessDescription('');
       setWhatsapp('');
-      setServicePerformed('');
       setUsedWhen(null);
       setRating(0);
       setWouldHireAgain(null);
@@ -189,9 +222,10 @@ export function AddRecommendationScreen() {
     } catch (error) {
       const message = error instanceof Error && error.message.trim()
         ? error.message.trim()
-        : 'Nao foi possivel enviar sua avaliacao com as fotos.';
-      Alert.alert('Nao foi possivel enviar', message);
+        : 'Não foi possível enviar sua avaliação com as fotos.';
+      Alert.alert('Não foi possível enviar', message);
     } finally {
+      submitInFlightRef.current = false;
       setLoading(false);
     }
   }
@@ -203,7 +237,9 @@ export function AddRecommendationScreen() {
         allowsMultipleSelection: true,
         orderedSelection: true,
         selectionLimit: 6,
-        quality: 0.72
+        quality: 0.72,
+        // On iOS, request a broadly supported representation so HEIC photos can be uploaded.
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
       });
 
       if (result.canceled) return;
@@ -226,6 +262,41 @@ export function AddRecommendationScreen() {
     setTimeout(() => {
       scrollRef.current?.scrollTo({ y: targetY, animated: true });
     }, Platform.OS === 'ios' ? 120 : 40);
+  }
+
+  function setFieldPosition(field: FieldKey, event: LayoutChangeEvent) {
+    fieldPositionsRef.current[field] = event.nativeEvent.layout.y;
+  }
+
+  function focusFirstError(nextErrors: Errors) {
+    const fieldOrder: FieldKey[] = [
+      'supplierName',
+      'whatsapp',
+      'serviceSpecialtyId',
+      'customServiceDescription',
+      'usedWhen',
+      'rating',
+      'wouldHireAgain',
+      'comment'
+    ];
+    const firstErrorField = fieldOrder.find((field) => nextErrors[field]);
+    if (!firstErrorField) return;
+
+    const fieldY = fieldPositionsRef.current[firstErrorField] ?? 0;
+    scrollRef.current?.scrollTo({ y: Math.max(fieldY - 24, 0), animated: true });
+
+    const refByField: Partial<Record<FieldKey, RefObject<TextInput | null>>> = {
+      supplierName: supplierNameRef,
+      whatsapp: whatsappRef,
+      customServiceDescription: customServiceDescriptionRef,
+      comment: commentRef
+    };
+    const inputRef = refByField[firstErrorField];
+    if (!inputRef?.current) return;
+
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, Platform.OS === 'ios' ? 350 : 180);
   }
 
   return (
@@ -265,19 +336,24 @@ export function AddRecommendationScreen() {
         ) : (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profissional</Text>
-            <AppInput label="Nome do fornecedor" value={supplierName} onChangeText={setSupplierName} error={errors.supplierName} placeholder="Ex: Dona Cida Diarista" />
-            <PhoneInput label="WhatsApp/contato" value={whatsapp} onChangeText={setWhatsapp} error={errors.whatsapp} helperText="Escolha o país e digite DDD + número." />
+            <View onLayout={(event) => setFieldPosition('supplierName', event)}>
+              <AppInput ref={supplierNameRef} label="Nome do fornecedor" value={supplierName} onChangeText={setSupplierName} error={errors.supplierName} placeholder="Ex: Dona Cida Diarista" />
+            </View>
+            <View onLayout={(event) => setFieldPosition('whatsapp', event)}>
+              <PhoneInput ref={whatsappRef} label="WhatsApp/contato" value={whatsapp} onChangeText={setWhatsapp} error={errors.whatsapp} helperText="Escolha o país e digite DDD + número." />
+            </View>
             {existingProvider ? (
               <ExistingProviderCard
                 provider={existingProvider}
                 onViewProvider={() => navigation.getParent()?.navigate('RecommendationDetail', { id: existingProvider.id })}
               />
             ) : (
-              <View style={styles.fieldGroup}>
+              <View style={styles.fieldGroup} onLayout={(event) => setFieldPosition('serviceSpecialtyId', event)}>
                 <Text style={styles.label}>Qual serviço esse profissional realiza?</Text>
                 <Pressable
                   style={[styles.serviceSelector, selectedSpecialty && styles.serviceSelectorSelected]}
                   onPress={() => {
+                    setServicePickerPurpose('primary');
                     setServiceSearch('');
                     setShowAllServices(false);
                     setServicePickerOpen(true);
@@ -288,28 +364,96 @@ export function AddRecommendationScreen() {
                     {selectedSpecialty?.name ?? 'Buscar serviço'}
                   </Text>
                 </Pressable>
-                <Text style={styles.popularLabel}>Mais procurados</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularChipList}>
-                  {getPopularSelectorServices().map((specialtyItem) => (
-                    <Pressable key={specialtyItem.id} style={[styles.popularChip, serviceSpecialtyId === specialtyItem.id && styles.popularChipSelected]} onPress={() => selectSpecialty(specialtyItem.id)}>
-                      <Text style={[styles.popularChipText, serviceSpecialtyId === specialtyItem.id && styles.popularChipTextSelected]}>{specialtyItem.name}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                {serviceSpecialtyId !== 'outros' ? (
+                  <>
+                    <Text style={styles.popularLabel}>Mais procurados</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularChipList}>
+                      {getPopularSelectorServices().map((specialtyItem) => (
+                        <Pressable key={specialtyItem.id} style={[styles.popularChip, serviceSpecialtyId === specialtyItem.id && styles.popularChipSelected]} onPress={() => selectSpecialty(specialtyItem.id)}>
+                          <Text style={[styles.popularChipText, serviceSpecialtyId === specialtyItem.id && styles.popularChipTextSelected]}>{specialtyItem.name}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : null}
+                {serviceSpecialtyId && serviceSpecialtyId !== 'outros' ? (
+                  <View style={styles.additionalServicesBlock}>
+                    <View style={styles.additionalServicesHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Serviços adicionais</Text>
+                        <Text style={styles.fieldHint}>Opcional · escolha até 4</Text>
+                      </View>
+                      {additionalServiceSpecialtyIds.length < 4 ? (
+                        <Pressable
+                          style={styles.addServiceButton}
+                          onPress={() => {
+                            setServicePickerPurpose('additional');
+                            setServiceSearch('');
+                            setShowAllServices(true);
+                            setServicePickerOpen(true);
+                          }}
+                        >
+                          <Text style={styles.addServiceButtonText}>+ Adicionar</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {additionalServiceSpecialtyIds.length ? (
+                      <View style={styles.selectedServicesWrap}>
+                        {additionalServiceSpecialtyIds.map((id) => (
+                          <Pressable key={id} style={styles.selectedServiceChip} onPress={() => setAdditionalServiceSpecialtyIds((current) => current.filter((item) => item !== id))}>
+                            <Text style={styles.selectedServiceChipText}>{getServiceSpecialtyById(id)?.name}</Text>
+                            <X color={colors.primary} size={14} />
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             )}
             {!existingProvider ? (
               <>
               {errors.serviceSpecialtyId ? <Text style={styles.error}>{errors.serviceSpecialtyId}</Text> : null}
               {serviceSpecialtyId === 'outros' ? (
-                <AppInput
-                  label="Descreva o serviço"
-                  value={customServiceDescription}
-                  onChangeText={setCustomServiceDescription}
-                  error={errors.customServiceDescription}
-                  placeholder="Ex: afiação de facas, instalação de tela, professor particular..."
-                />
+                <View style={styles.customServiceCard} onLayout={(event) => setFieldPosition('customServiceDescription', event)}>
+                  <View style={styles.customServiceNameBlock}>
+                    <AppInput
+                      ref={customServiceDescriptionRef}
+                      label="Nome do serviço sugerido"
+                      value={customServiceDescription}
+                      onChangeText={setCustomServiceDescription}
+                      error={errors.customServiceDescription}
+                      placeholder="Ex: Professor particular"
+                      maxLength={40}
+                    />
+                    <Text style={styles.fieldHint}>Digite somente um serviço, sem telefone, localização ou propaganda.</Text>
+                  </View>
+                  <View style={styles.categoryQuestionBlock}>
+                    <Text style={styles.categoryQuestionEyebrow}>Organização do catálogo</Text>
+                    <Text style={styles.label}>Em qual categoria ele se encaixa melhor?</Text>
+                    <Text style={styles.categoryQuestionHint}>Escolha a opção mais próxima. A equipe poderá revisar depois.</Text>
+                    <View style={styles.categorySuggestionWrap}>
+                      {categories.filter((category) => category.id !== 'outros').map((category) => (
+                        <Pressable key={category.id} style={[styles.categorySuggestionChip, suggestedCategoryId === category.id && styles.categorySuggestionChipSelected]} onPress={() => setSuggestedCategoryId(category.id)}>
+                          <Text style={[styles.categorySuggestionText, suggestedCategoryId === category.id && styles.categorySuggestionTextSelected]}>{category.name}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
               ) : null}
+              <View style={styles.businessDescriptionBlock}>
+                <AppInput
+                  label="Sobre o trabalho deste profissional"
+                  value={businessDescription}
+                  onChangeText={setBusinessDescription}
+                  placeholder="Ex: Instalação, manutenção e automação de cortinas e persianas."
+                  maxLength={240}
+                  multiline
+                  numberOfLines={3}
+                  style={styles.descriptionInput}
+                />
+              </View>
               </>
             ) : null}
           </View>
@@ -318,15 +462,7 @@ export function AddRecommendationScreen() {
         <View style={[styles.section, isContextualReviewFlow && styles.composerSection]}>
           <Text style={styles.sectionTitle}>Sua experiência</Text>
           {isContextualReviewFlow ? <Text style={styles.sectionHint}>Você não está editando o prestador. Sua contribuição entra como uma nova experiência no perfil.</Text> : null}
-          <AppInput
-            label="Serviço realizado"
-            value={servicePerformed}
-            onChangeText={setServicePerformed}
-            error={errors.servicePerformed}
-            placeholder={getServicePerformedPlaceholder(contextualProvider)}
-          />
-
-          <OptionGroup label="Quando você utilizou?" error={errors.usedWhen}>
+          <OptionGroup label="Quando você utilizou?" error={errors.usedWhen} onLayout={(event) => setFieldPosition('usedWhen', event)}>
             {usedWhenOptions.map((option) => (
               <Pressable key={option.value} style={[styles.optionChip, usedWhen === option.value && styles.optionSelected]} onPress={() => setUsedWhen(option.value)}>
                 <Text style={[styles.optionText, usedWhen === option.value && styles.optionTextSelected]}>{option.label}</Text>
@@ -334,7 +470,7 @@ export function AddRecommendationScreen() {
             ))}
           </OptionGroup>
 
-          <View style={styles.fieldGroup}>
+          <View style={styles.fieldGroup} onLayout={(event) => setFieldPosition('rating', event)}>
             <Text style={styles.label}>Nota</Text>
             <View style={styles.ratingRow}>
               {[1, 2, 3, 4, 5].map((value) => (
@@ -347,7 +483,7 @@ export function AddRecommendationScreen() {
             {errors.rating ? <Text style={styles.error}>{errors.rating}</Text> : null}
           </View>
 
-          <OptionGroup label="Você contrataria novamente?" error={errors.wouldHireAgain}>
+          <OptionGroup label="Você contrataria novamente?" error={errors.wouldHireAgain} onLayout={(event) => setFieldPosition('wouldHireAgain', event)}>
             <Pressable style={[styles.binaryOption, wouldHireAgain === true && styles.optionSelected]} onPress={() => setWouldHireAgain(true)}>
               <Text style={[styles.optionText, wouldHireAgain === true && styles.optionTextSelected]}>Sim</Text>
             </Pressable>
@@ -356,8 +492,14 @@ export function AddRecommendationScreen() {
             </Pressable>
           </OptionGroup>
 
-          <View onLayout={(event) => setCommentFieldY(event.nativeEvent.layout.y)}>
+          <View
+            onLayout={(event) => {
+              setCommentFieldY(event.nativeEvent.layout.y);
+              setFieldPosition('comment', event);
+            }}
+          >
             <AppInput
+              ref={commentRef}
               label="Comentário"
               value={comment}
               onChangeText={setComment}
@@ -415,9 +557,24 @@ export function AddRecommendationScreen() {
   );
 
   function selectSpecialty(id: string) {
+    if (servicePickerPurpose === 'additional') {
+      if (id !== 'outros' && id !== serviceSpecialtyId) {
+        setAdditionalServiceSpecialtyIds((current) => [...new Set([...current, id])].slice(0, 4));
+      }
+      setServiceSearch('');
+      setServicePickerOpen(false);
+      setShowAllServices(false);
+      return;
+    }
     setServiceSpecialtyId(id);
+    setAdditionalServiceSpecialtyIds((current) => current.filter((item) => item !== id));
     setServiceSearch('');
-    if (id !== 'outros') setCustomServiceDescription('');
+    if (id !== 'outros') {
+      setCustomServiceDescription('');
+      setSuggestedCategoryId('');
+    } else {
+      setAdditionalServiceSpecialtyIds([]);
+    }
     setServicePickerOpen(false);
     setShowAllServices(false);
   }
@@ -486,16 +643,6 @@ function getHireAgainMetric(reviews: any[]) {
   if (!total) return { percentage: 100, total };
   const yes = reviews.filter((review) => (typeof review.wouldHireAgain === 'boolean' ? review.wouldHireAgain : review.rating >= 4.5)).length;
   return { percentage: Math.round((yes / total) * 100), total };
-}
-
-function getServicePerformedPlaceholder(provider?: any) {
-  const service = normalize(provider?.serviceSpecialtyName || provider?.customServiceDescription || '');
-  if (service.includes('diarista') || service.includes('limpeza')) return 'Ex: limpeza semanal, faxina pós-obra...';
-  if (service.includes('eletricista')) return 'Ex: troca de disjuntor, instalação de tomada...';
-  if (service.includes('jardineiro')) return 'Ex: poda do jardim, limpeza do canteiro...';
-  if (service.includes('piscineiro')) return 'Ex: limpeza da piscina, tratamento da água...';
-  if (service.includes('chaveiro')) return 'Ex: troca de fechadura, abertura emergencial...';
-  return 'Ex: descreva o serviço que este profissional realizou';
 }
 
 function SuccessModal({ visible, message, onClose }: { visible: boolean; message: string; onClose: () => void }) {
@@ -629,9 +776,9 @@ function ServiceSpecialtyPicker({
   );
 }
 
-function OptionGroup({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function OptionGroup({ label, error, children, onLayout }: { label: string; error?: string; children: ReactNode; onLayout?: (event: LayoutChangeEvent) => void }) {
   return (
-    <View style={styles.fieldGroup}>
+    <View style={styles.fieldGroup} onLayout={onLayout}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.optionWrap}>{children}</View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -933,6 +1080,26 @@ const styles = StyleSheet.create({
   suggestionPressed: { backgroundColor: '#F3F8F5' },
   suggestionName: { color: colors.text, fontSize: typography.small, fontWeight: '500', fontFamily: typography.fontFamily },
   fieldGroup: { gap: 5 },
+  fieldHint: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 17, fontFamily: typography.fontFamily },
+  descriptionInput: { minHeight: 86, textAlignVertical: 'top' },
+  customServiceCard: { marginTop: spacing.sm, gap: spacing.lg },
+  customServiceNameBlock: { gap: 6 },
+  categoryQuestionBlock: { gap: 7, borderTopWidth: 1, borderTopColor: '#DDE9E4', paddingTop: spacing.lg },
+  categoryQuestionEyebrow: { color: colors.primary, fontSize: 10, lineHeight: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: typography.fontFamily },
+  categoryQuestionHint: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 17, fontFamily: typography.fontFamily },
+  businessDescriptionBlock: { marginTop: spacing.md },
+  additionalServicesBlock: { gap: spacing.sm, paddingTop: spacing.sm },
+  additionalServicesHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  addServiceButton: { borderRadius: 999, backgroundColor: '#E7F3EF', paddingHorizontal: spacing.md, paddingVertical: 8 },
+  addServiceButtonText: { color: colors.primary, fontSize: typography.tiny, fontWeight: '900', fontFamily: typography.fontFamily },
+  selectedServicesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  selectedServiceChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1, borderColor: '#CFE4DA', backgroundColor: '#F3FAF7', paddingHorizontal: 10, paddingVertical: 7 },
+  selectedServiceChipText: { color: colors.darkGreen, fontSize: typography.tiny, fontWeight: '800', fontFamily: typography.fontFamily },
+  categorySuggestionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
+  categorySuggestionChip: { borderRadius: 999, borderWidth: 1, borderColor: '#DDE9E4', backgroundColor: '#FBFCFB', paddingHorizontal: 10, paddingVertical: 7 },
+  categorySuggestionChipSelected: { backgroundColor: colors.darkGreen, borderColor: colors.darkGreen },
+  categorySuggestionText: { color: colors.secondaryText, fontSize: typography.tiny, fontWeight: '800', fontFamily: typography.fontFamily },
+  categorySuggestionTextSelected: { color: colors.surface },
   optionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   optionChip: {
     minHeight: 34,

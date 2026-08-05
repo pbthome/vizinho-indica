@@ -28,12 +28,17 @@ export function SplashScreen({ navigation }: any) {
       return;
     }
 
-    refreshSession().then((user) => {
-      if (!user) navigation.replace('Welcome');
-      else if (user.status === 'pending') navigation.replace('WaitingApproval');
-      else if (user.status === 'rejected' || user.status === 'blocked') navigation.replace('AccessStatus');
-      else navigation.getParent()?.replace('Resident');
-    });
+    void refreshSession()
+      .then((user) => {
+        if (!user) navigation.replace('Welcome');
+        else if (user.status === 'pending') navigation.replace('WaitingApproval');
+        else if (user.status === 'rejected' || user.status === 'blocked') navigation.replace('AccessStatus');
+        else navigation.getParent()?.replace('Resident');
+      })
+      .catch((error) => {
+        console.error('[SplashScreen] refreshSession failed', error);
+        navigation.replace('Welcome');
+      });
   }, [authInitialized, isPasswordRecoveryMode, navigation, refreshSession]);
 
   return (

@@ -17,7 +17,13 @@ export type TimelineReviewItem = {
 };
 
 export function getServiceName(item: Recommendation) {
-  return item.customServiceDescription || item.serviceSpecialtyName || item.categoryName;
+  return item.serviceSpecialtyId === 'outros'
+    ? item.customServiceDescription || 'Serviço sugerido'
+    : item.serviceSpecialtyName || item.categoryName;
+}
+
+export function getAdditionalServiceCount(item: Recommendation) {
+  return item.additionalServiceSpecialtyIds?.length ?? item.additionalServiceSpecialtyNames?.length ?? 0;
 }
 
 export function getReviewWouldHireAgain(review: Review) {
@@ -119,19 +125,11 @@ export function buildTimelineReviews(items: Recommendation[]): TimelineReviewIte
 }
 
 export function formatReviewDateLabel(value: string) {
-  const date = parseDateValue(value);
-  const parts = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).formatToParts(date);
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const month = (parts.find((part) => part.type === 'month')?.value ?? '').replace('.', '');
-  return `Avaliado em ${day} ${month}`.trim();
+  return `Avaliado em ${formatDayMonth(value)}`.trim();
 }
 
 export function formatLastRecommendationLabel(value: string) {
-  const date = parseDateValue(value);
-  const parts = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).formatToParts(date);
-  const day = parts.find((part) => part.type === 'day')?.value ?? '';
-  const month = (parts.find((part) => part.type === 'month')?.value ?? '').replace('.', '');
-  return `Ultima recomendacao: ${day} ${month}`.trim();
+  return `Última recomendação: ${formatDayMonth(value)}`.trim();
 }
 
 function parseDateValue(value: string) {
@@ -141,4 +139,12 @@ function parseDateValue(value: string) {
   }
 
   return new Date(value);
+}
+
+function formatDayMonth(value: string) {
+  const date = parseDateValue(value);
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit'
+  }).format(date);
 }

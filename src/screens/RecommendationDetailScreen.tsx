@@ -12,6 +12,7 @@ import { Recommendation, Review } from '../types';
 
 export function RecommendationDetailScreen({ route, navigation }: any) {
   const [item, setItem] = useState<Recommendation | undefined>();
+  const [loading, setLoading] = useState(true);
   const [expandedPhoto, setExpandedPhoto] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<ContextualFeedbackState | null>(null);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,9 +24,31 @@ export function RecommendationDetailScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setItem(undefined);
+    getRecommendationByIdAsync(route.params.id)
+      .then((data) => {
+        if (!active) return;
+        setItem(data);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [route.params.id]);
+
+  useEffect(() => {
     pendingFocusReviewId.current = route.params.focusReviewId;
-    getRecommendationByIdAsync(route.params.id).then(setItem);
-  }, [route.params.focusReviewId, route.params.id]);
+  }, [route.params.focusReviewId]);
+
+  if (loading) {
+    return <RecommendationDetailSkeleton navigation={navigation} />;
+  }
 
   if (!item) {
     return (
@@ -70,6 +93,12 @@ export function RecommendationDetailScreen({ route, navigation }: any) {
         <View style={styles.hero}>
           <Text style={styles.providerName}>{item.supplierName}</Text>
           <Text style={styles.providerSpecialty}>{getServiceName(item)}</Text>
+          {item.additionalServiceSpecialtyNames?.length ? (
+            <View style={styles.serviceTagRow}>
+              {item.additionalServiceSpecialtyNames.map((name) => <Text key={name} style={styles.serviceTag}>{name}</Text>)}
+            </View>
+          ) : null}
+          {item.businessDescription ? <Text style={styles.businessDescription}>{item.businessDescription}</Text> : null}
 
           <View style={styles.heroMetrics}>
             <Pressable
@@ -119,6 +148,43 @@ export function RecommendationDetailScreen({ route, navigation }: any) {
 
       <PhotoPreview uri={expandedPhoto} onClose={() => setExpandedPhoto(null)} />
       <ContextualFeedback feedback={feedback} bottomInset={Math.max(insets.bottom, 12) + 24} />
+    </SafeAreaView>
+  );
+}
+
+function RecommendationDetailSkeleton({ navigation }: { navigation: any }) {
+  return (
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" style={styles.backButton} onPress={() => navigation.goBack()}>
+          <ArrowLeft color={colors.darkGreen} size={22} />
+        </Pressable>
+
+        <View style={styles.hero}>
+          <SkeletonBlock width="68%" height={30} />
+          <SkeletonBlock width="42%" height={18} />
+          <View style={styles.skeletonMetricRow}>
+            <SkeletonPill width={82} />
+            <SkeletonPill width={156} />
+          </View>
+        </View>
+
+        <View style={styles.ctaGroup}>
+          <SkeletonBlock width="100%" height={52} radius={18} />
+          <SkeletonBlock width="100%" height={52} radius={18} />
+        </View>
+
+        <View style={styles.reviewSectionHeader}>
+          <SkeletonBlock width={170} height={22} />
+          <SkeletonBlock width="72%" height={16} />
+        </View>
+
+        <View style={styles.reviewFeed}>
+          {[0, 1, 2].map((entry) => (
+            <ReviewSkeletonCard key={entry} />
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -230,6 +296,50 @@ function getHireAgainMetric(reviews: Review[]) {
   if (!total) return { percentage: 100, yes: 0, total };
   const yes = reviews.filter((review) => getReviewWouldHireAgain(review)).length;
   return { percentage: Math.round((yes / total) * 100), yes, total };
+}
+
+function ReviewSkeletonCard() {
+  return (
+    <View style={styles.reviewItem}>
+      <View style={styles.reviewTopRow}>
+        <SkeletonBlock width={42} height={42} radius={21} />
+        <View style={styles.skeletonReviewerInfo}>
+          <SkeletonBlock width="56%" height={16} />
+          <SkeletonBlock width="38%" height={14} />
+        </View>
+      </View>
+
+      <View style={styles.reviewMetadataRow}>
+        <SkeletonPill width={58} />
+        <SkeletonBlock width={110} height={14} />
+      </View>
+
+      <SkeletonBlock width="100%" height={16} />
+      <SkeletonBlock width="92%" height={16} />
+      <SkeletonBlock width="54%" height={16} />
+
+      <View style={styles.reviewMicroAction}>
+        <SkeletonBlock width={23} height={23} radius={12} />
+        <SkeletonBlock width={142} height={14} />
+      </View>
+    </View>
+  );
+}
+
+function SkeletonBlock({
+  width,
+  height,
+  radius = 10
+}: {
+  width: number | `${number}%` | '100%';
+  height: number;
+  radius?: number;
+}) {
+  return <View style={[styles.skeletonBlock, { width, height, borderRadius: radius }]} />;
+}
+
+function SkeletonPill({ width }: { width: number }) {
+  return <SkeletonBlock width={width} height={26} radius={999} />;
 }
 
 function getReviewWouldHireAgain(review: Review) {
@@ -351,6 +461,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: typography.fontFamily
   },
+  serviceTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  serviceTag: { color: colors.darkGreen, backgroundColor: '#E7F3EF', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, fontSize: typography.tiny, fontWeight: '800', fontFamily: typography.fontFamily },
+  businessDescription: { color: colors.secondaryText, fontSize: typography.small, lineHeight: 20, fontFamily: typography.fontFamily },
   heroMetrics: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -535,6 +648,20 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingLeft: 0,
     minHeight: 24
+  },
+  skeletonMetricRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4
+  },
+  skeletonReviewerInfo: {
+    flex: 1,
+    gap: 8
+  },
+  skeletonBlock: {
+    backgroundColor: '#E7ECE9'
   },
   hireAgainBadge: {
     width: 23,

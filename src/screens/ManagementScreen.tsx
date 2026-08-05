@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { Archive, Check, MessageSquareText, Search, ShieldAlert, Trash2, X } from 'lucide-react-native';
+import { Archive, Check, ChevronRight, MessageSquareText, Search, ShieldAlert, Tags, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
@@ -8,6 +8,7 @@ import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
 import { isAdmin } from '../navigation/guards';
+import { countPendingServiceSuggestions } from '../repositories/serviceSuggestionsRepository';
 import { useApp } from '../services/AppContext';
 import {
   ModerationContentItem,
@@ -62,6 +63,7 @@ export function ManagementScreen({ navigation }: any) {
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [moderationItems, setModerationItems] = useState<ModerationContentItem[]>([]);
+  const [pendingServiceSuggestions, setPendingServiceSuggestions] = useState(0);
   const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
   const [pendingModerationItem, setPendingModerationItem] = useState<ModerationContentItem | null>(null);
 
@@ -162,11 +164,17 @@ export function ManagementScreen({ navigation }: any) {
           registerWarning('moderacao', reason);
         },
         setLoadingBySection
-      })
+      }),
+      withTimeout(countPendingServiceSuggestions(user.condominiumId), 'sugestões de serviços')
+        .then(setPendingServiceSuggestions)
+        .catch((reason) => {
+          setPendingServiceSuggestions(0);
+          registerWarning('sugestões de serviços', reason);
+        })
     ]);
 
     if (warnings.length) {
-      setLoadWarning(`Nao foi possivel carregar: ${warnings.join(', ')}.`);
+      setLoadWarning(`Não foi possível carregar: ${warnings.join(', ')}.`);
     }
   }, [filter, loadAccessRequests, navigation, user]);
 
@@ -204,7 +212,7 @@ export function ManagementScreen({ navigation }: any) {
       },
       onError: (reason) => {
         setAccessRequests([]);
-        setLoadWarning(`Nao foi possivel carregar: pedidos de acesso (${getLoadErrorMessage(reason)}).`);
+        setLoadWarning(`Não foi possível carregar: pedidos de acesso (${getLoadErrorMessage(reason)}).`);
       },
       setLoadingBySection
     });
@@ -350,7 +358,7 @@ export function ManagementScreen({ navigation }: any) {
       }
     } catch (error) {
       setAccessRequests(previousRequests);
-      Alert.alert('Nao foi possivel concluir a acao', getLoadErrorMessage(error));
+      Alert.alert('Não foi possível concluir a ação', getLoadErrorMessage(error));
     }
   }
 
@@ -393,7 +401,7 @@ export function ManagementScreen({ navigation }: any) {
     } catch (error) {
       setActionFeedback({
         tone: 'error',
-        message: `Nao foi possivel remover: ${getLoadErrorMessage(error)}.`
+        message: `Não foi possível remover: ${getLoadErrorMessage(error)}.`
       });
     }
   }
@@ -427,7 +435,7 @@ export function ManagementScreen({ navigation }: any) {
             await load();
             Alert.alert('Conteudo removido', `${moderationTypeLabels[item.type]} removido com sucesso.`);
           } catch (error) {
-            Alert.alert('Nao foi possivel remover', getLoadErrorMessage(error));
+            Alert.alert('Não foi possível remover', getLoadErrorMessage(error));
           }
         }
       }
@@ -453,6 +461,20 @@ export function ManagementScreen({ navigation }: any) {
           <SummaryPill label="Novos" value={newFeedbacks} />
           <SummaryPill label="Moderação" value={moderationCount} />
         </View>
+
+        <Pressable style={styles.serviceSuggestionsLink} onPress={() => navigation.getParent()?.navigate('ServiceSuggestions')}>
+          <View style={styles.serviceSuggestionsIcon}><Tags color={colors.primary} size={20} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.serviceSuggestionsTitle}>Sugestões de serviços</Text>
+            <Text style={styles.serviceSuggestionsText}>Aprovar, vincular ou rejeitar nomes enviados pelos moradores.</Text>
+          </View>
+          {pendingServiceSuggestions > 0 ? (
+            <View style={styles.serviceSuggestionsBadge}>
+              <Text style={styles.serviceSuggestionsBadgeText}>{pendingServiceSuggestions}</Text>
+            </View>
+          ) : null}
+          <ChevronRight color={colors.secondaryText} size={20} />
+        </Pressable>
 
         <View style={styles.sectionTabs}>
           {(Object.keys(sectionLabels) as Section[]).map((item) => (
@@ -642,12 +664,12 @@ function FeedbackCard({ item, onRead, onArchive }: { item: Feedback; onRead: () 
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleWrap}>
-          <Text style={styles.cardTitle}>{item.subject}</Text>
+          <Text style={styles.cardTitle}>{formatFeedbackSubject(item.subject)}</Text>
           <Text style={styles.cardMeta}>{item.userName || 'Morador sem nome'} · {formatDateTime(item.createdAt)}</Text>
         </View>
         <Badge label={feedbackStatusLabels[item.status]} tone={item.status === 'novo' ? 'warning' : item.status === 'resolvido' ? 'success' : 'neutral'} />
       </View>
-      <Text style={styles.cardBody}>{item.message}</Text>
+      <Text style={styles.cardBody}>{formatFeedbackMessage(item.message)}</Text>
       <View style={styles.actionRow}>
         <IconAction title="Lido" icon={<MessageSquareText color={colors.surface} size={16} />} onPress={onRead} disabled={item.status !== 'novo'} />
         <IconAction title="Arquivar" icon={<Archive color={colors.surface} size={16} />} onPress={onArchive} disabled={item.status === 'resolvido'} />
@@ -853,6 +875,23 @@ function getModerationActionButtonLabel(type: ModerationContentType) {
   return 'Remover só foto';
 }
 
+function formatFeedbackSubject(subject: Feedback['subject']) {
+  if (subject === 'Sugestao de melhoria') return 'Sugestão de melhoria';
+  if (subject === 'Recomendacao/fornecedor') return 'Recomendação/fornecedor';
+  if (subject === 'Duvida') return 'Dúvida';
+  return subject;
+}
+
+function formatFeedbackMessage(message: string) {
+  if (message === 'Nao consegui abrir as fotos de uma recomendacao na primeira tentativa.') {
+    return 'Não consegui abrir as fotos de uma recomendação na primeira tentativa.';
+  }
+  if (message === 'Seria bom ter um jeito mais rapido de avisar quando uma indicacao mudou de telefone.') {
+    return 'Seria bom ter um jeito mais rápido de avisar quando uma indicação mudou de telefone.';
+  }
+  return message;
+}
+
 function getModerationConfirmTitle(type: ModerationContentType) {
   if (type === 'review') return 'Remover avaliação?';
   if (type === 'comment') return 'Remover comentário?';
@@ -975,6 +1014,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm
   },
+  serviceSuggestionsLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: '#D7EAE1' },
+  serviceSuggestionsIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#E7F3EF', alignItems: 'center', justifyContent: 'center' },
+  serviceSuggestionsTitle: { color: colors.text, fontSize: typography.small, fontWeight: '900', fontFamily: typography.fontFamily },
+  serviceSuggestionsText: { color: colors.secondaryText, fontSize: typography.tiny, lineHeight: 16, fontFamily: typography.fontFamily },
+  serviceSuggestionsBadge: { minWidth: 25, height: 25, borderRadius: 13, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7 },
+  serviceSuggestionsBadgeText: { color: colors.surface, fontSize: 11, lineHeight: 14, fontWeight: '900', fontFamily: typography.fontFamily },
   summaryPill: {
     flex: 1,
     minHeight: 68,

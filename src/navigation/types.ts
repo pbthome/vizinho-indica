@@ -3,7 +3,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type AuthStackParamList = {
   Splash: undefined;
   Welcome: { mode?: 'login' } | undefined;
-  ResetPassword: { email?: string; mode?: 'code' | 'link' } | undefined;
+  ResetPassword: { email?: string; mode?: 'code' | 'link' | 'request'; notice?: string; autoSend?: boolean } | undefined;
   Onboarding: undefined;
   SignUp: undefined;
   WaitingApproval: undefined;
@@ -27,6 +27,7 @@ export type RootStackParamList = {
   AccessRequests: undefined;
   AccessRequestDetail: { id: string };
   ReportedRecommendations: undefined;
+  ServiceSuggestions: undefined;
 };
 
 declare global {

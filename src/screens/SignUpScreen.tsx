@@ -10,6 +10,7 @@ import { typography } from '../constants/typography';
 import { useApp } from '../services/AppContext';
 import { requestAccess } from '../services/api';
 import { getBackendMode, getBackendStatusMessage } from '../services/supabase/config';
+import { getFriendlyAuthErrorMessage } from '../utils/authErrors';
 import { getPhoneValidation } from '../utils/phone';
 
 const MVP_CONDOMINIUM = 'Jardins Bolonha';
@@ -86,7 +87,7 @@ export function SignUpScreen({ navigation }: any) {
       setUser(user);
       navigation.replace('WaitingApproval');
     } catch (error) {
-      Alert.alert('Nao foi possivel solicitar acesso', error instanceof Error ? error.message : 'Tente novamente.');
+      Alert.alert('Não foi possível solicitar acesso', getFriendlyAuthErrorMessage(error, 'signup'));
     } finally {
       setLoading(false);
     }
@@ -101,7 +102,7 @@ export function SignUpScreen({ navigation }: any) {
         </View>
         {backendMode === 'mock' ? (
           <View style={styles.mockNotice}>
-            <Text style={styles.mockNoticeLabel}>Modo demonstracao</Text>
+            <Text style={styles.mockNoticeLabel}>Modo demonstração</Text>
             <Text style={styles.mockNoticeText}>{backendMessage}</Text>
           </View>
         ) : null}

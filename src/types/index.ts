@@ -76,7 +76,10 @@ export type Recommendation = {
   categoryName: string;
   serviceSpecialtyId?: string;
   serviceSpecialtyName?: string;
+  additionalServiceSpecialtyIds?: string[];
+  additionalServiceSpecialtyNames?: string[];
   customServiceDescription?: string;
+  businessDescription?: string;
   whatsapp: string;
   normalizedPhone: string;
   contactInfo: string;
@@ -120,9 +123,12 @@ export type Report = {
 
 export type FeedbackSubject =
   | 'Problema no app'
+  | 'Sugestão de melhoria'
   | 'Sugestao de melhoria'
   | 'Dados incorretos'
+  | 'Recomendação/fornecedor'
   | 'Recomendacao/fornecedor'
+  | 'Dúvida'
   | 'Duvida'
   | 'Outro';
 
@@ -153,15 +159,38 @@ export type NewRecommendationPayload = {
   supplierName: string;
   categoryId: string;
   serviceSpecialtyId: string;
+  additionalServiceSpecialtyIds?: string[];
   customServiceDescription?: string;
+  suggestedCategoryId?: string;
+  businessDescription?: string;
   whatsapp: string;
-  servicePerformed: string;
+  servicePerformed?: string;
   usedWhen: 'this_week' | 'last_month' | 'three_to_six_months' | 'more_than_six_months';
   wouldHireAgain: boolean;
   rating: number;
   comment: string;
   photos?: string[];
   confirmedUse: boolean;
+};
+
+export type ServiceSuggestionStatus = 'pending' | 'approved' | 'linked' | 'rejected';
+
+export type ServiceSuggestion = {
+  id: string;
+  condominiumId: string;
+  proposedName: string;
+  suggestedCategoryId?: string;
+  suggestedCategoryName?: string;
+  providerId?: string;
+  providerName?: string;
+  createdBy?: string;
+  createdByName?: string;
+  status: ServiceSuggestionStatus;
+  resolvedSpecialtyId?: string;
+  resolvedSpecialtyName?: string;
+  resolvedCategoryName?: string;
+  reviewedAt?: string;
+  createdAt: string;
 };
 
 export type CreateFeedbackPayload = {

@@ -277,7 +277,9 @@ export async function searchRecommendations(condominiumId: string, query: string
   return active(recommendations)
     .filter((item) => item.condominiumId === condominiumId)
     .map(toPublicRecommendation)
-    .filter((item) => (categoryId ? item.categoryId === categoryId || item.serviceSpecialtyId === categoryId : true))
+    .filter((item) => (categoryId
+      ? item.additionalServiceSpecialtyIds?.includes(categoryId) || item.categoryId === categoryId || item.serviceSpecialtyId === categoryId
+      : true))
     .filter((item) => (minRating ? item.averageRating >= minRating : true))
     .filter((item) => {
       if (!normalized) return true;
@@ -310,6 +312,11 @@ export async function addRecommendation(user: User, payload: NewRecommendationPa
   }
   const specialty = getServiceSpecialtyById(payload.serviceSpecialtyId);
   const category = getCategoryById(specialty?.categoryId ?? payload.categoryId);
+  const additionalSpecialties = [...new Set(payload.additionalServiceSpecialtyIds ?? [])]
+    .filter((id) => id !== payload.serviceSpecialtyId && id !== 'outros')
+    .slice(0, 4)
+    .map((id) => getServiceSpecialtyById(id))
+    .filter(Boolean);
   const recommendationId = `rec-${Date.now()}`;
   const [reviewerBlock, reviewerLot] = user.unit.split(',').map((part) => part.trim());
   const recommendation: Recommendation = {
@@ -320,7 +327,10 @@ export async function addRecommendation(user: User, payload: NewRecommendationPa
     categoryName: category?.name ?? 'Outros',
     serviceSpecialtyId: payload.serviceSpecialtyId,
     serviceSpecialtyName: specialty?.name ?? 'Outros',
+    additionalServiceSpecialtyIds: additionalSpecialties.map((item) => item!.id),
+    additionalServiceSpecialtyNames: additionalSpecialties.map((item) => item!.name),
     customServiceDescription: payload.customServiceDescription,
+    businessDescription: payload.businessDescription,
     whatsapp: payload.whatsapp,
     normalizedPhone: normalizePhoneNumber(payload.whatsapp),
     contactInfo: 'Contato informado por morador.',
